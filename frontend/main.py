@@ -349,8 +349,6 @@ def main(page: ft.Page):
     etat_resize["etait_mobile"] = page.width is not None and page.width < SEUIL_MOBILE
     afficher_login()
 
-
 if __name__ == "__main__":
-    # assets_dir="assets" est indispensable pour que page.window.icon,
-    # page.favicon et toute image chargée depuis /assets fonctionnent.
-    ft.app(target=main, assets_dir="assets")
+    port = int(os.environ.get("PORT", 8550))
+    ft.app(target=main, assets_dir="assets", view=ft.AppView.WEB_BROWSER, port=port)
