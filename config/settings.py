@@ -4,6 +4,7 @@ Stack : Django 4.2 + Django Ninja + PostgreSQL/PostGIS
 """
 
 import os
+import platform
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
@@ -14,16 +15,23 @@ SECRET_KEY = config("SECRET_KEY", default="dev-secret-key-changez-moi-en-product
 DEBUG = config("DEBUG", default=True, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
 
-# ─── GDAL / GEOS (Windows) ──────────────────────────────────────────────────
-# Chemins vers les DLL installées via le paquet GDAL pour Windows.
-# Si tu as installé GDAL ailleurs, adapte ces deux chemins.
-GDAL_LIBRARY_PATH = config("GDAL_LIBRARY_PATH", default=r"C:\Program Files\GDAL\gdal312.dll")
-GEOS_LIBRARY_PATH = config("GEOS_LIBRARY_PATH", default=r"C:\Program Files\GDAL\geos_c.dll")
+# ─── GDAL / GEOS ─────────────────────────────────────────────────────────────
+# Sous Windows (dev local) : on pointe explicitement vers les DLL installées.
+# Sous Linux (Render/Docker/prod) : GDAL est installé via apt-get et Django
+# le détecte tout seul dans le PATH système — inutile et risqué de forcer un
+# chemin Windows qui n'existe pas sur le serveur.
+if platform.system() == "Windows":
+    GDAL_LIBRARY_PATH = config("GDAL_LIBRARY_PATH", default=r"C:\Program Files\GDAL\gdal312.dll")
+    GEOS_LIBRARY_PATH = config("GEOS_LIBRARY_PATH", default=r"C:\Program Files\GDAL\geos_c.dll")
 
-# Ajouter le dossier GDAL au PATH système pour que les DLL annexes se chargent
-_gdal_bin_dir = os.path.dirname(GDAL_LIBRARY_PATH)
-if os.path.isdir(_gdal_bin_dir):
-    os.environ["PATH"] = _gdal_bin_dir + os.pathsep + os.environ.get("PATH", "")
+    _gdal_bin_dir = os.path.dirname(GDAL_LIBRARY_PATH)
+    if os.path.isdir(_gdal_bin_dir):
+        os.environ["PATH"] = _gdal_bin_dir + os.pathsep + os.environ.get("PATH", "")
+else:
+    # On permet quand même une surcharge explicite via variables d'environnement
+    # si jamais le serveur Linux a besoin d'un chemin précis (rare).
+    GDAL_LIBRARY_PATH = config("GDAL_LIBRARY_PATH", default=None)
+    GEOS_LIBRARY_PATH = config("GEOS_LIBRARY_PATH", default=None)
 
 # ─── Applications ─────────────────────────────────────────────────────────────
 DJANGO_APPS = [
@@ -93,16 +101,31 @@ TEMPLATES = [
 ]
 
 # ─── Base de données — PostgreSQL + PostGIS ───────────────────────────────────
-DATABASES = {
-    "default": {
-        "ENGINE": "django.contrib.gis.db.backends.postgis",
-        "NAME": config("DB_NAME", default="cimetiere_db"),
-        "USER": config("DB_USER", default="postgres"),
-        "PASSWORD": config("DB_PASSWORD", default=""),
-        "HOST": config("DB_HOST", default="localhost"),
-        "PORT": config("DB_PORT", default="5432"),
+# En production (Render), DATABASE_URL est fourni automatiquement par le
+# service Postgres. En dev local, on retombe sur les variables DB_* du .env.
+import dj_database_url  # noqa: E402
+
+DATABASE_URL = config("DATABASE_URL", default=None)
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            engine="django.contrib.gis.db.backends.postgis",
+            conn_max_age=600,
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.contrib.gis.db.backends.postgis",
+            "NAME": config("DB_NAME", default="cimetiere_db"),
+            "USER": config("DB_USER", default="postgres"),
+            "PASSWORD": config("DB_PASSWORD", default=""),
+            "HOST": config("DB_HOST", default="localhost"),
+            "PORT": config("DB_PORT", default="5432"),
+        }
+    }
 
 # ─── Modèle utilisateur personnalisé ──────────────────────────────────────────
 AUTH_USER_MODEL = "users.Utilisateur"
@@ -141,12 +164,17 @@ EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@cimetiere.app")
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-]
+# En production, on autorise aussi le domaine Render du frontend Flet.
+# Ajoute/adapte l'URL exacte une fois le frontend déployé.
+CORS_ALLOWED_ORIGINS = config(
+    "CORS_ALLOWED_ORIGINS",
+    default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000",
+).split(",")
 CORS_ALLOW_CREDENTIALS = True
+
+# En démo/soutenance, si tu préfères ne pas te battre avec CORS_ALLOWED_ORIGINS,
+# tu peux temporairement décommenter la ligne suivante pour tout autoriser :
+# CORS_ALLOW_ALL_ORIGINS = True
 
 # ─── Celery ───────────────────────────────────────────────────────────────────
 # Optionnel en développement — les tâches async tournent en mode synchrone
