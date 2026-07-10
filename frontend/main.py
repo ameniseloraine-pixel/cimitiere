@@ -1,17 +1,4 @@
-"""
-Application Flet — Gestion de Cimetière
-Point d'entrée principal : navigation, menu latéral selon le rôle (RBAC)
-Thèmes : clair (blanc) et sombre (noir) — basculable depuis le header
-
-Lancement (Windows / Mac / Linux) :
-    pip install flet requests
-    flet run frontend/main.py             (mode desktop)
-    flet run frontend/main.py --web        (mode navigateur)
-
-Variable d'environnement optionnelle :
-    CIMETIERE_API_URL=http://localhost:8000/api   (par défaut)
-"""
-
+import os
 import flet as ft
 
 from api_client import APIClient
