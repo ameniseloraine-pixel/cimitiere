@@ -35,4 +35,4 @@ RUN python manage.py collectstatic --noinput || true
 EXPOSE 8000
 
 # Au démarrage : applique les migrations puis lance gunicorn.
-CMD python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+CMD python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --timeout 120
