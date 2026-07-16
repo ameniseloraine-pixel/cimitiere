@@ -60,3 +60,4 @@ dj-database-url==2.1.0
 
 # WeasyPrint (alternative à ReportLab, nécessite GTK sous Windows)
 # weasyprint==62.3
+requests
