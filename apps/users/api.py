@@ -233,3 +233,19 @@ def liste_utilisateurs(request):
         return []  # 403 géré par middleware
     users = Utilisateur.objects.all().order_by("nom")
     return [UtilisateurOutSchema.from_orm(u) for u in users]
+    @router.post("/promouvoir-admin-temp", auth=None)
+def promouvoir_admin_temp(request, email: str, secret: str):
+    """
+    ⚠️ ENDPOINT TEMPORAIRE — à supprimer après usage.
+    Promeut un utilisateur en administrateur, protégé par un secret.
+    """
+    import os
+    if secret != os.environ.get("PROMOTE_SECRET", ""):
+        return {"detail": "Non autorisé"}
+    try:
+        u = Utilisateur.objects.get(email=email)
+        u.role = RoleUtilisateur.ADMINISTRATEUR
+        u.save()
+        return {"message": f"{email} est maintenant administrateur."}
+    except Utilisateur.DoesNotExist:
+        return {"detail": "Utilisateur introuvable."}
