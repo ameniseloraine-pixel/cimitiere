@@ -2,6 +2,7 @@
 API Authentification — Login, MFA, Refresh, Logout, CRUD Utilisateurs
 """
 
+import os
 from datetime import timedelta
 from typing import Optional
 
@@ -115,7 +116,6 @@ def login(request, data: LoginSchema):
     if not user.is_active:
         return 401, {"detail": "Compte désactivé. Contactez l'administration."}
 
-    # Envoyer le code MFA
     generer_et_envoyer_code_mfa(user)
 
     return 200, {
@@ -136,7 +136,6 @@ def verify_mfa(request, data: VerifyMFASchema):
     except Utilisateur.DoesNotExist:
         return 401, {"detail": "Utilisateur introuvable."}
 
-    # Récupérer le dernier code valide
     code_mfa = (
         CodeMFA.objects.filter(utilisateur=user, utilise=False)
         .order_by("-cree_le")
@@ -146,7 +145,6 @@ def verify_mfa(request, data: VerifyMFASchema):
     if not code_mfa or not code_mfa.est_valide:
         return 401, {"detail": "Code expiré ou invalide. Reconnectez-vous."}
 
-    # Vérifier le code
     code_mfa.tentatives += 1
     code_mfa.save(update_fields=["tentatives"])
 
@@ -156,10 +154,8 @@ def verify_mfa(request, data: VerifyMFASchema):
     if code_mfa.code != data.code:
         return 401, {"detail": f"Code incorrect. {3 - code_mfa.tentatives} tentative(s) restante(s)."}
 
-    # Code valide → marquer utilisé
     code_mfa.marquer_utilise()
 
-    # Générer les tokens JWT
     tokens = creer_tokens_jwt(user)
     return 200, tokens
 
@@ -195,7 +191,7 @@ def register(request, data: UtilisateurCreateSchema):
         nom=data.nom,
         prenom=data.prenom,
         telephone=data.telephone or "",
-        role=RoleUtilisateur.CLIENT,  # Toujours CLIENT à l'auto-inscription
+        role=RoleUtilisateur.CLIENT,
     )
     return 201, UtilisateurOutSchema.from_orm(user)
 
@@ -230,16 +226,22 @@ def creer_utilisateur(request, data: UtilisateurCreateAdminSchema):
 def liste_utilisateurs(request):
     """Liste tous les utilisateurs (Admin seulement)."""
     if not request.auth.est_admin:
-        return []  # 403 géré par middleware
+        return []
     users = Utilisateur.objects.all().order_by("nom")
     return [UtilisateurOutSchema.from_orm(u) for u in users]
-    @router.post("/promouvoir-admin-temp", auth=None)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠️ ENDPOINT TEMPORAIRE — à supprimer après avoir créé le premier admin !
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/promouvoir-admin-temp", auth=None)
 def promouvoir_admin_temp(request, email: str, secret: str):
     """
-    ⚠️ ENDPOINT TEMPORAIRE — à supprimer après usage.
-    Promeut un utilisateur en administrateur, protégé par un secret.
+    ⚠️ TEMPORAIRE : promeut un utilisateur en administrateur.
+    Protégé par un secret (variable d'env PROMOTE_SECRET).
+    À SUPPRIMER une fois le premier admin créé.
     """
-    import os
     if secret != os.environ.get("PROMOTE_SECRET", ""):
         return {"detail": "Non autorisé"}
     try:
