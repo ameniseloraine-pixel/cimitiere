@@ -3,10 +3,9 @@ Services utilisateurs — MFA, JWT, Emails
 """
 
 import jwt
+import requests
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.conf import settings
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
 
 from .models import Utilisateur, CodeMFA
 
@@ -16,41 +15,41 @@ def generer_et_envoyer_code_mfa(user: Utilisateur) -> CodeMFA:
     Génère un code MFA à 6 chiffres et l'envoie par email.
     Invalide les anciens codes non utilisés.
     """
-    # Invalider les anciens codes
     CodeMFA.objects.filter(utilisateur=user, utilise=False).update(utilise=True)
-
-    # Créer le nouveau code (auto-généré dans save())
     code_mfa = CodeMFA.objects.create(utilisateur=user)
-
-    # Envoyer l'email
     _envoyer_email_mfa(user, code_mfa.code)
-
     return code_mfa
 
 
 def _envoyer_email_mfa(user: Utilisateur, code: str):
-    """Envoi du code MFA par email."""
+    """Envoi du code MFA par email via l'API Brevo (HTTPS, pas SMTP)."""
     sujet = f"[Cimetière] Votre code de connexion : {code}"
-    corps = f"""
-Bonjour {user.prenom},
+    corps_html = f"""
+    <p>Bonjour {user.prenom},</p>
+    <p>Votre code de vérification est : <strong style="font-size:20px">{code}</strong></p>
+    <p>Ce code est valable 10 minutes et ne peut être utilisé qu'une seule fois.</p>
+    <p>Si vous n'avez pas tenté de vous connecter, ignorez cet email et changez votre mot de passe.</p>
+    <p>Cordialement,<br>L'équipe de gestion du cimetière</p>
+    """
 
-Votre code de vérification est : {code}
-
-Ce code est valable 10 minutes et ne peut être utilisé qu'une seule fois.
-
-Si vous n'avez pas tenté de vous connecter, ignorez cet email et changez votre mot de passe.
-
-Cordialement,
-L'équipe de gestion du cimetière
-    """.strip()
-
-    send_mail(
-        subject=sujet,
-        message=corps,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
+    response = requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={
+            "api-key": settings.BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "accept": "application/json",
+        },
+        json={
+            "sender": {"name": "Gestion Cimetière", "email": settings.DEFAULT_FROM_EMAIL},
+            "to": [{"email": user.email}],
+            "subject": sujet,
+            "htmlContent": corps_html,
+        },
+        timeout=10,
     )
+
+    if response.status_code >= 400:
+        raise Exception(f"Échec envoi email Brevo: {response.status_code} - {response.text}")
 
 
 def creer_tokens_jwt(user: Utilisateur) -> dict:
