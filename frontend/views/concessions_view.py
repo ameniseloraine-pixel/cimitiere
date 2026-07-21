@@ -13,7 +13,8 @@ from components.widgets import (
     bouton_principal, champ_texte,
     COULEURS_STATUT_CONCESSION, COULEURS_STATUT_EXHUMATION,
 )
-from config import COULEUR_PRIMAIRE
+from config import COULEUR_PRIMAIRE, couleurs
+from responsive import est_mobile as _est_mobile, largeur_contenu
 
 
 TYPES_CONCESSION = [
@@ -27,23 +28,25 @@ TYPES_CONCESSION = [
 
 def ConcessionsView(page: ft.Page, client):
     tabs_content = ft.Container(expand=True)
+    mobile = _est_mobile(page)
+    largeur_dialogue = largeur_contenu(page, 380)
 
     # ─── Création d'une concession (NOUVEAU) ──────────────────────────────────
 
     def ouvrir_dialogue_creation_concession():
         reservation_id_field = champ_texte(
-            "ID de la réservation validée *", width=350,
+            "ID de la réservation validée *",
             keyboard_type=ft.KeyboardType.NUMBER,
             hint_text="Voir dans l'onglet Réservations",
         )
         type_dd = ft.Dropdown(
             label="Type de concession *",
-            width=350,
+            expand=True,
             options=[ft.dropdown.Option(k, v) for k, v in TYPES_CONCESSION],
             value="TEMP_10",
         )
         date_debut_field = champ_texte(
-            "Date de début (AAAA-MM-JJ) *", width=350,
+            "Date de début (AAAA-MM-JJ) *",
             hint_text="Ex: 2026-07-09",
         )
 
@@ -80,8 +83,8 @@ def ConcessionsView(page: ft.Page, client):
                     reservation_id_field,
                     type_dd,
                     date_debut_field,
-                ], spacing=10, tight=True),
-                width=350,
+                ], spacing=10, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+                width=largeur_dialogue,
             ),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
@@ -93,8 +96,8 @@ def ConcessionsView(page: ft.Page, client):
     # ─── Onglet Concessions ───────────────────────────────────────────────────
 
     def ouvrir_dialogue_exhumation(concession: dict):
-        motif_field = champ_texte("Motif de l'exhumation *", width=350, multiline=True, min_lines=2)
-        destination_field = champ_texte("Destination des restes mortels (optionnel)", width=350, multiline=True, min_lines=2)
+        motif_field = champ_texte("Motif de l'exhumation *", multiline=True, min_lines=2)
+        destination_field = champ_texte("Destination des restes mortels (optionnel)", multiline=True, min_lines=2)
 
         def soumettre(e):
             if not motif_field.value:
@@ -110,7 +113,11 @@ def ConcessionsView(page: ft.Page, client):
 
         dlg = ft.AlertDialog(
             title=ft.Text(f"Demande d'exhumation — {concession['numero_contrat']}"),
-            content=ft.Column([motif_field, destination_field], tight=True, spacing=10),
+            content=ft.Container(
+                content=ft.Column([motif_field, destination_field], tight=True, spacing=10,
+                                   horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+                width=largeur_dialogue,
+            ),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
                 ft.ElevatedButton("Soumettre", on_click=soumettre, bgcolor=COULEUR_PRIMAIRE, color="white"),
@@ -234,7 +241,7 @@ def ConcessionsView(page: ft.Page, client):
         page.open(dlg)
 
     def refuser_exhumation(exhumation: dict):
-        motif_field = champ_texte("Motif du refus", width=320, multiline=True, min_lines=2)
+        motif_field = champ_texte("Motif du refus", multiline=True, min_lines=2)
 
         def confirmer(e):
             try:
@@ -247,7 +254,7 @@ def ConcessionsView(page: ft.Page, client):
 
         dlg = ft.AlertDialog(
             title=ft.Text(f"Refuser la demande {exhumation['numero_demande']}"),
-            content=motif_field,
+            content=ft.Container(content=motif_field, width=largeur_dialogue),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
                 ft.ElevatedButton("Refuser", on_click=confirmer, bgcolor="#ef4444", color="white"),
@@ -335,7 +342,7 @@ def ConcessionsView(page: ft.Page, client):
 
     # NOUVEAU : bouton "Créer une concession", visible pour Admin/Secrétariat uniquement
     bouton_creer = ft.ElevatedButton(
-        "Créer une concession", icon=ft.icons.ADD,
+        "Créer" if mobile else "Créer une concession", icon=ft.icons.ADD,
         bgcolor=COULEUR_PRIMAIRE, color="white",
         on_click=lambda e: ouvrir_dialogue_creation_concession(),
         visible=client.can_see_finance,
@@ -344,16 +351,16 @@ def ConcessionsView(page: ft.Page, client):
     return ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text("Concessions & Exhumations", size=20, weight=ft.FontWeight.BOLD),
+                ft.Text("Concessions & Exhumations", size=17 if mobile else 20, weight=ft.FontWeight.BOLD),
                 ft.Container(expand=True),
                 bouton_creer,
                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: on_tab_change(
                     type("E", (), {"control": tabs})()
                 ), tooltip="Actualiser"),
-            ]),
+            ], wrap=True, spacing=8, run_spacing=8),
             tabs,
             ft.Divider(),
             tabs_content,
-        ], spacing=10, expand=True),
-        padding=20, expand=True,
+        ], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO),
+        padding=12 if mobile else 20, expand=True,
     )
