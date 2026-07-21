@@ -16,6 +16,7 @@ from components.widgets import (
     bouton_principal, champ_texte, COULEURS_STATUT_FACTURE,
 )
 from config import COULEUR_PRIMAIRE
+from responsive import est_mobile as _est_mobile, largeur_contenu
 
 
 CANAUX_PAIEMENT = [
@@ -28,10 +29,11 @@ CANAUX_PAIEMENT = [
 
 
 def FinanceView(page: ft.Page, client):
+    mobile = _est_mobile(page)
     content_area = ft.Container(content=chargement("Chargement des factures..."), expand=True)
     filtre_statut = ft.Dropdown(
         label="Filtrer par statut",
-        width=220,
+        width=largeur_contenu(page, 220, marge=24) if mobile else 220,
         options=[ft.dropdown.Option("", "Toutes")] + [
             ft.dropdown.Option(k, v) for k, v in {
                 "BROUILLON": "Brouillon", "EMISE": "Émise",
@@ -59,17 +61,16 @@ def FinanceView(page: ft.Page, client):
 
     def ouvrir_dialogue_paiement(facture: dict):
         canal_dd = ft.Dropdown(
-            label="Canal de paiement *",
-            width=320,
+            label="Canal de paiement *", expand=True,
             options=[ft.dropdown.Option(k, v) for k, v in CANAUX_PAIEMENT],
         )
         montant_field = champ_texte(
-            "Montant (FCFA) *", width=320, keyboard_type=ft.KeyboardType.NUMBER,
+            "Montant (FCFA) *", expand=True, keyboard_type=ft.KeyboardType.NUMBER,
             value=str(int(facture["solde_restant"])),
         )
-        reference_field = champ_texte("Référence transaction (optionnel)", width=320)
-        telephone_field = champ_texte("Téléphone utilisé (optionnel)", width=320)
-        notes_field = champ_texte("Notes (optionnel)", width=320, multiline=True, min_lines=2)
+        reference_field = champ_texte("Référence transaction (optionnel)", expand=True)
+        telephone_field = champ_texte("Téléphone utilisé (optionnel)", expand=True)
+        notes_field = champ_texte("Notes (optionnel)", expand=True, multiline=True, min_lines=2)
 
         info_solde = ft.Text(
             f"Solde restant : {facture['solde_restant']:,.0f} FCFA / Total : {facture['montant_total']:,.0f} FCFA",
@@ -111,7 +112,7 @@ def FinanceView(page: ft.Page, client):
                     info_solde,
                     canal_dd, montant_field, reference_field, telephone_field, notes_field,
                 ], spacing=10, tight=True),
-                width=350,
+                width=largeur_contenu(page, 380),
             ),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
@@ -128,17 +129,16 @@ def FinanceView(page: ft.Page, client):
         de la notification push opérateur) ; le client le saisit pour valider.
         """
         canal_dd = ft.Dropdown(
-            label="Opérateur *",
-            width=320,
+            label="Opérateur *", expand=True,
             options=[
                 ft.dropdown.Option("MOBILE_MONEY", "Mobile Money (MTN)"),
                 ft.dropdown.Option("AIRTEL_MONEY", "Airtel Money"),
             ],
             value="MOBILE_MONEY",
         )
-        telephone_field = champ_texte("Numéro Mobile Money *", width=320, hint_text="06 XXX XXXX")
+        telephone_field = champ_texte("Numéro Mobile Money *", expand=True, hint_text="06 XXX XXXX")
         montant_field = champ_texte(
-            "Montant (FCFA) *", width=320, keyboard_type=ft.KeyboardType.NUMBER,
+            "Montant (FCFA) *", expand=True, keyboard_type=ft.KeyboardType.NUMBER,
             value=str(int(facture["solde_restant"])),
         )
         info_solde = ft.Text(
@@ -175,7 +175,7 @@ def FinanceView(page: ft.Page, client):
                 transaction_courante["data"] = transaction
 
                 code_field = champ_texte(
-                    "Code de confirmation (6 chiffres)", width=320,
+                    "Code de confirmation (6 chiffres)", expand=True,
                     max_length=6, text_align=ft.TextAlign.CENTER,
                 )
                 info_attente = ft.Text(
@@ -235,7 +235,7 @@ def FinanceView(page: ft.Page, client):
             ]),
             content=ft.Container(
                 content=ft.Column([step1, step2, loading], spacing=14, tight=True),
-                width=350,
+                width=largeur_contenu(page, 380),
             ),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
@@ -322,7 +322,7 @@ def FinanceView(page: ft.Page, client):
                     ft.Text("Historique des paiements", size=13, weight=ft.FontWeight.W_600),
                     *paiements_rows,
                 ], spacing=8, tight=True, scroll=ft.ScrollMode.AUTO),
-                width=380, height=420,
+                width=largeur_contenu(page, 420), height=420,
             ),
             actions=actions + [ft.TextButton("Fermer", on_click=lambda e: page.close(dlg))],
         )
@@ -346,7 +346,7 @@ def FinanceView(page: ft.Page, client):
                     ft.Text(f"Payé : {f['montant_paye']:,.0f} FCFA", size=13, color="#22c55e"),
                     ft.Text(f"Restant : {f['solde_restant']:,.0f} FCFA", size=13,
                             color="#ef4444" if f["solde_restant"] > 0 else "#22c55e"),
-                ], spacing=16),
+                ], spacing=16, wrap=True, run_spacing=4),
                 ft.ProgressBar(value=ratio, color="#22c55e", bgcolor="#e5e7eb", height=6, border_radius=4),
                 ft.Row([
                     ft.Text(f"Émise le {f['date_emission'][:10]}"
@@ -388,13 +388,13 @@ def FinanceView(page: ft.Page, client):
     return ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text(titre, size=20, weight=ft.FontWeight.BOLD),
+                ft.Text(titre, size=17 if mobile else 20, weight=ft.FontWeight.BOLD),
                 ft.Container(expand=True),
                 filtre_statut,
                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger(), tooltip="Actualiser"),
-            ]),
+            ], wrap=True, spacing=8, run_spacing=8),
             ft.Divider(),
             content_area,
-        ], spacing=10, expand=True),
-        padding=20, expand=True,
+        ], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO),
+        padding=12 if mobile else 20, expand=True,
     )
