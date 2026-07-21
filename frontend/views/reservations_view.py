@@ -12,13 +12,15 @@ from components.widgets import (
     bouton_principal, COULEURS_STATUT_RESERVATION,
 )
 from config import COULEUR_PRIMAIRE
+from responsive import est_mobile as _est_mobile, largeur_contenu
 
 
 def ReservationsView(page: ft.Page, client):
+    mobile = _est_mobile(page)
     content_area = ft.Container(content=chargement("Chargement des réservations..."), expand=True)
     filtre_statut = ft.Dropdown(
         label="Filtrer par statut",
-        width=220,
+        width=largeur_contenu(page, 220, marge=24) if mobile else 220,
         options=[
             ft.dropdown.Option("", "Tous les statuts"),
             ft.dropdown.Option("ATTENTE", "En attente de validation"),
@@ -31,7 +33,7 @@ def ReservationsView(page: ft.Page, client):
     )
 
     def ouvrir_dialogue_rejet(reservation):
-        motif_field = ft.TextField(label="Motif du rejet", multiline=True, min_lines=2, width=350)
+        motif_field = ft.TextField(label="Motif du rejet", multiline=True, min_lines=2, expand=True)
 
         def confirmer_rejet(e):
             try:
@@ -44,7 +46,7 @@ def ReservationsView(page: ft.Page, client):
 
         dlg = ft.AlertDialog(
             title=ft.Text(f"Rejeter le dossier {reservation['numero_dossier']}"),
-            content=motif_field,
+            content=ft.Container(content=motif_field, width=largeur_contenu(page, 380)),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
                 ft.ElevatedButton("Confirmer le rejet", on_click=confirmer_rejet, bgcolor="#ef4444", color="white"),
@@ -183,13 +185,13 @@ def ReservationsView(page: ft.Page, client):
     return ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text(titre, size=20, weight=ft.FontWeight.BOLD),
+                ft.Text(titre, size=17 if mobile else 20, weight=ft.FontWeight.BOLD),
                 ft.Container(expand=True),
                 filtre_statut,
                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger(), tooltip="Actualiser"),
-            ]),
+            ], wrap=True, spacing=8, run_spacing=8),
             ft.Divider(),
             content_area,
-        ], spacing=10, expand=True),
-        padding=20, expand=True,
+        ], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO),
+        padding=12 if mobile else 20, expand=True,
     )
