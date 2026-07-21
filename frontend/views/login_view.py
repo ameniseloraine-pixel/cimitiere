@@ -1,11 +1,14 @@
 """
-Vue Login — Authentification en 2 étapes : email/mot de passe puis code MFA
+Vue Login — Authentification en 2 étapes : email/mot de passe puis code MFA.
+Habillage "premium" : panneau de marque or/anthracite + carte de formulaire
+élevée, entièrement responsive (aucune largeur codée en dur qui déborde).
 """
 
 import flet as ft
 from api_client import APIError
-from components.widgets import champ_texte, bouton_principal, afficher_snackbar
-from config import COULEUR_PRIMAIRE, COULEUR_SECONDAIRE
+from components.widgets import champ_texte, bouton_principal, afficher_snackbar, conteneur_formulaire
+from config import couleurs
+from responsive import est_mobile as _est_mobile, largeur_contenu
 
 
 def LoginView(page: ft.Page, client, on_login_success, on_go_register):
@@ -14,18 +17,19 @@ def LoginView(page: ft.Page, client, on_login_success, on_go_register):
     on_login_success() : callback appelé quand l'authentification réussit.
     on_go_register() : callback pour aller vers l'inscription.
     """
+    t = couleurs(page)
+    mobile = _est_mobile(page)
 
     # ─── Étape 1 : Email / Mot de passe ───────────────────────────────────────
-    email_field = champ_texte("Adresse email", autofocus=True, width=320)
-    password_field = champ_texte("Mot de passe", password=True, can_reveal_password=True, width=320)
+    email_field = champ_texte("Adresse email", autofocus=True)
+    password_field = champ_texte("Mot de passe", password=True, can_reveal_password=True)
 
     # ─── Étape 2 : Code MFA ─────────────────────────────────────────────────
-    mfa_field = champ_texte("Code à 6 chiffres", width=320, max_length=6, text_align=ft.TextAlign.CENTER)
-    mfa_info_text = ft.Text("", size=13, color="#6b7280", text_align=ft.TextAlign.CENTER)
+    mfa_field = champ_texte("Code à 6 chiffres", max_length=6, text_align=ft.TextAlign.CENTER)
+    mfa_info_text = ft.Text("", size=13, color=t["texte_att"], text_align=ft.TextAlign.CENTER)
 
-    loading = ft.ProgressRing(visible=False, width=20, height=20, stroke_width=2)
+    loading = ft.ProgressRing(visible=False, width=20, height=20, stroke_width=2, color=t["accent"])
 
-    # Conteneurs pour basculer entre les étapes
     step1_container = ft.Container()
     step2_container = ft.Container(visible=False)
 
@@ -94,10 +98,9 @@ def LoginView(page: ft.Page, client, on_login_success, on_go_register):
             afficher_snackbar(page, err.detail, succes=False)
         page.update()
 
-    login_btn = bouton_principal("Se connecter", on_click=faire_login, icone=ft.icons.LOGIN, width=320)
-    verify_btn = bouton_principal("Vérifier", on_click=verifier_mfa, icone=ft.icons.VERIFIED_USER, width=320)
+    login_btn = bouton_principal("Se connecter", on_click=faire_login, icone=ft.icons.LOGIN)
+    verify_btn = bouton_principal("Vérifier", on_click=verifier_mfa, icone=ft.icons.VERIFIED_USER)
 
-    # Permettre la soumission avec Entrée
     password_field.on_submit = faire_login
     mfa_field.on_submit = verifier_mfa
 
@@ -107,37 +110,41 @@ def LoginView(page: ft.Page, client, on_login_success, on_go_register):
             password_field,
             login_btn,
             ft.Row([
-                ft.Text("Pas encore de compte ?", color="#6b7280", size=13),
+                ft.Text("Pas encore de compte ?", color=t["texte_att"], size=13),
                 ft.TextButton("Créer un compte", on_click=lambda e: on_go_register()),
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            ], alignment=ft.MainAxisAlignment.CENTER, wrap=True),
         ],
         spacing=16,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
     )
 
     step2_container.content = ft.Column(
         [
-            ft.Icon(ft.icons.MARK_EMAIL_READ, size=48, color=COULEUR_PRIMAIRE),
-            ft.Text("Vérification en deux étapes", size=18, weight=ft.FontWeight.BOLD),
+            ft.Icon(ft.icons.MARK_EMAIL_READ, size=44, color=t["accent"]),
+            ft.Text("Vérification en deux étapes", size=17, weight=ft.FontWeight.BOLD, color=t["texte"], text_align=ft.TextAlign.CENTER),
             mfa_info_text,
             mfa_field,
             verify_btn,
             ft.Row([
                 ft.TextButton("Renvoyer le code", on_click=renvoyer_code),
                 ft.TextButton("Modifier l'email", on_click=retour_etape1),
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            ], alignment=ft.MainAxisAlignment.CENTER, wrap=True),
         ],
         spacing=14,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
     )
 
-    return ft.Container(
+    # ─── Carte de formulaire — élevée, plafonnée en largeur, jamais de débordement ───
+    carte_formulaire = ft.Container(
         content=ft.Column(
             [
-                ft.Icon(ft.icons.LOCATION_CITY, size=56, color=COULEUR_PRIMAIRE),
-                ft.Text("Gestion de Cimetière", size=24, weight=ft.FontWeight.BOLD, color=COULEUR_SECONDAIRE),
-                ft.Text("Connectez-vous à votre espace", size=14, color="#6b7280"),
-                ft.Container(height=10),
+                ft.Icon(ft.icons.LOCATION_CITY, size=40, color=t["accent"]),
+                ft.Text(
+                    "Gestion de Cimetière", size=22, weight=ft.FontWeight.BOLD, color=t["texte"],
+                    font_family="Playfair Display, Georgia, serif", text_align=ft.TextAlign.CENTER,
+                ),
+                ft.Text("Connectez-vous à votre espace", size=13, color=t["texte_att"], text_align=ft.TextAlign.CENTER),
+                ft.Container(height=8),
                 step1_container,
                 step2_container,
                 loading,
@@ -146,7 +153,58 @@ def LoginView(page: ft.Page, client, on_login_success, on_go_register):
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             scroll=ft.ScrollMode.AUTO,
         ),
-        alignment=ft.alignment.center,
-        expand=True,
-        padding=30,
+        width=largeur_contenu(page, 400),
+        bgcolor=t["surface"],
+        padding=ft.padding.symmetric(horizontal=32, vertical=36),
+        border_radius=20,
+        border=ft.border.all(1, t["bordure"]),
+        shadow=ft.BoxShadow(spread_radius=0, blur_radius=30, color=t["ombre"], offset=ft.Offset(0, 12)),
     )
+
+    # ─── Panneau de marque (desktop uniquement) — dégradé anthracite/or ───────────
+    panneau_marque = ft.Container(
+        content=ft.Column([
+            ft.Icon(ft.icons.LOCATION_CITY, size=52, color=t["accent"]),
+            ft.Container(height=16),
+            ft.Text(
+                "Un dernier repos,\nune gestion sans faille.", size=30, weight=ft.FontWeight.BOLD,
+                color="#FFFFFF", font_family="Playfair Display, Georgia, serif", height=1.25,
+            ),
+            ft.Container(height=14),
+            ft.Text(
+                "Cartographie interactive, concessions, facturation et conformité "
+                "réglementaire réunies dans un même espace de confiance.",
+                size=14, color="#D9D4C4",
+            ),
+        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.START),
+        expand=1,
+        padding=56,
+        gradient=ft.LinearGradient(
+            begin=ft.alignment.top_left, end=ft.alignment.bottom_right,
+            colors=["#1C1F26", "#12131A"],
+        ),
+    )
+
+    if mobile:
+        corps = ft.Container(
+            content=carte_formulaire,
+            alignment=ft.alignment.center,
+            expand=True,
+            padding=20,
+            bgcolor=t["fond"],
+        )
+    else:
+        corps = ft.Row(
+            [
+                panneau_marque,
+                ft.Container(
+                    content=carte_formulaire,
+                    alignment=ft.alignment.center,
+                    expand=1,
+                    bgcolor=t["fond"],
+                ),
+            ],
+            expand=True, spacing=0,
+        )
+
+    return ft.Container(content=corps, expand=True)
