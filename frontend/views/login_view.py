@@ -1,14 +1,16 @@
 """
 Vue Login — Authentification en 2 étapes : email/mot de passe puis code MFA.
-Habillage "premium" : panneau de marque or/anthracite + carte de formulaire
-élevée, entièrement responsive (aucune largeur codée en dur qui déborde).
+Carte unique centrée, identique sur tous les écrans (pas de panneau
+"desktop only" qui change l'apparence selon la taille). Fond avec un
+dégradé radial très doux (accent or) pour une touche premium discrète,
+qui reste correctement thème-aware en clair comme en sombre.
 """
 
 import flet as ft
 from api_client import APIError
-from components.widgets import champ_texte, bouton_principal, afficher_snackbar, conteneur_formulaire
+from components.widgets import champ_texte, bouton_principal, afficher_snackbar
 from config import couleurs
-from responsive import est_mobile as _est_mobile, largeur_contenu
+from responsive import largeur_contenu, est_mobile as _est_mobile
 
 
 def LoginView(page: ft.Page, client, on_login_success, on_go_register):
@@ -138,7 +140,14 @@ def LoginView(page: ft.Page, client, on_login_success, on_go_register):
     carte_formulaire = ft.Container(
         content=ft.Column(
             [
-                ft.Icon(ft.icons.LOCATION_CITY, size=40, color=t["accent"]),
+                ft.Container(
+                    content=ft.Icon(ft.icons.LOCATION_CITY, size=30, color=t["on_accent"]),
+                    bgcolor=t["accent"],
+                    width=64, height=64,
+                    border_radius=18,
+                    alignment=ft.alignment.center,
+                ),
+                ft.Container(height=6),
                 ft.Text(
                     "Gestion de Cimetière", size=22, weight=ft.FontWeight.BOLD, color=t["texte"],
                     font_family="Playfair Display, Georgia, serif", text_align=ft.TextAlign.CENTER,
@@ -161,50 +170,13 @@ def LoginView(page: ft.Page, client, on_login_success, on_go_register):
         shadow=ft.BoxShadow(spread_radius=0, blur_radius=30, color=t["ombre"], offset=ft.Offset(0, 12)),
     )
 
-    # ─── Panneau de marque (desktop uniquement) — dégradé anthracite/or ───────────
-    panneau_marque = ft.Container(
-        content=ft.Column([
-            ft.Icon(ft.icons.LOCATION_CITY, size=52, color=t["accent"]),
-            ft.Container(height=16),
-            ft.Text(
-                "Un dernier repos,\nune gestion sans faille.", size=30, weight=ft.FontWeight.BOLD,
-                color="#FFFFFF", font_family="Playfair Display, Georgia, serif", height=1.25,
-            ),
-            ft.Container(height=14),
-            ft.Text(
-                "Cartographie interactive, concessions, facturation et conformité "
-                "réglementaire réunies dans un même espace de confiance.",
-                size=14, color="#D9D4C4",
-            ),
-        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.START),
-        expand=1,
-        padding=56,
-        gradient=ft.LinearGradient(
-            begin=ft.alignment.top_left, end=ft.alignment.bottom_right,
-            colors=["#1C1F26", "#12131A"],
+    return ft.Container(
+        content=carte_formulaire,
+        alignment=ft.alignment.center,
+        expand=True,
+        padding=20,
+        gradient=ft.RadialGradient(
+            center=ft.alignment.top_center, radius=1.4,
+            colors=[ft.colors.with_opacity(0.10, t["accent"]), t["fond"]],
         ),
     )
-
-    if mobile:
-        corps = ft.Container(
-            content=carte_formulaire,
-            alignment=ft.alignment.center,
-            expand=True,
-            padding=20,
-            bgcolor=t["fond"],
-        )
-    else:
-        corps = ft.Row(
-            [
-                panneau_marque,
-                ft.Container(
-                    content=carte_formulaire,
-                    alignment=ft.alignment.center,
-                    expand=1,
-                    bgcolor=t["fond"],
-                ),
-            ],
-            expand=True, spacing=0,
-        )
-
-    return ft.Container(content=corps, expand=True)
