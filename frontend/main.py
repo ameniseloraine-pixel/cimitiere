@@ -164,6 +164,8 @@ def main(page: ft.Page):
             idx = e.control.selected_index
             etat_nav["route_index"] = idx
             naviguer(routes[idx])
+            if isinstance(e.control, ft.NavigationDrawer):
+                page.close(e.control)
 
         index_selectionne = min(etat_nav["route_index"], len(routes) - 1)
 
@@ -196,12 +198,45 @@ def main(page: ft.Page):
             on_change=on_nav_change,
         )
 
+        # ── Menu hamburger (mobile) — remplace la barre du bas, qui devenait
+        #    illisible / incomplète dès que le rôle a plus de 3-4 destinations
+        #    (ex. Admin : 7 items). Un tiroir latéral scrollable n'a pas cette
+        #    limite et affiche toujours le libellé complet de chaque item.
+        drawer = ft.NavigationDrawer(
+            selected_index=index_selectionne,
+            bgcolor=t["surface"],
+            indicator_color=ft.colors.with_opacity(0.16, t["accent"]),
+            controls=[
+                ft.Container(
+                    content=ft.Row([
+                        ft.Icon(ft.icons.LOCATION_CITY, color=t["accent"], size=22),
+                        ft.Text(
+                            "Gestion de Cimetière", size=15, weight=ft.FontWeight.BOLD,
+                            font_family="Playfair Display, Georgia, serif", color=t["texte"],
+                        ),
+                    ], spacing=8),
+                    padding=ft.padding.only(left=16, top=16, bottom=8),
+                ),
+                ft.Divider(color=t["bordure"]),
+                *[
+                    ft.NavigationDrawerDestination(icon=icon, selected_icon=sel_icon, label=label)
+                    for (_, icon, sel_icon, label) in items
+                ],
+            ],
+            on_change=on_nav_change,
+        )
+
+        def ouvrir_menu(e):
+            page.open(drawer)
+
         nav_rail_ref["rail"] = nav_rail
         nav_rail_ref["bar"] = nav_bar
+        nav_rail_ref["drawer"] = drawer
 
         header = ft.Container(
             content=ft.Row([
                 ft.Row([
+                    *([ft.IconButton(ft.icons.MENU, on_click=ouvrir_menu, tooltip="Menu")] if est_mobile else []),
                     ft.Icon(ft.icons.LOCATION_CITY, color=t["accent"], size=24),
                     ft.Text(
                         "Gestion de Cimetière",
@@ -211,7 +246,7 @@ def main(page: ft.Page):
                         color=t["texte"],
                         visible=not est_mobile,
                     ),
-                ], spacing=8),
+                ], spacing=4 if est_mobile else 8),
                 ft.Container(expand=True),
                 ft.Row([
                     ft.CircleAvatar(
@@ -233,14 +268,12 @@ def main(page: ft.Page):
         )
 
         if est_mobile:
+            # Le tiroir (drawer) n'est PAS un enfant de l'arbre visuel : Flet
+            # le gère via page.drawer / page.open(drawer) (cf. ouvrir_menu).
             app_shell.content = ft.Column(
                 [
                     header,
                     ft.Container(content=body, expand=True, bgcolor=t["fond"]),
-                    ft.Container(
-                        content=nav_bar,
-                        border=ft.border.only(top=ft.border.BorderSide(1, t["bordure"])),
-                    ),
                 ],
                 spacing=0,
                 expand=True,
