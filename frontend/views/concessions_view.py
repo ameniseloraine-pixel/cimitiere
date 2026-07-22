@@ -41,7 +41,6 @@ def ConcessionsView(page: ft.Page, client):
         )
         type_dd = ft.Dropdown(
             label="Type de concession *",
-            expand=True,
             options=[ft.dropdown.Option(k, v) for k, v in TYPES_CONCESSION],
             value="TEMP_10",
         )
