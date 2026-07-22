@@ -61,16 +61,16 @@ def FinanceView(page: ft.Page, client):
 
     def ouvrir_dialogue_paiement(facture: dict):
         canal_dd = ft.Dropdown(
-            label="Canal de paiement *", expand=True,
+            label="Canal de paiement *",
             options=[ft.dropdown.Option(k, v) for k, v in CANAUX_PAIEMENT],
         )
         montant_field = champ_texte(
-            "Montant (FCFA) *", expand=True, keyboard_type=ft.KeyboardType.NUMBER,
+            "Montant (FCFA) *", keyboard_type=ft.KeyboardType.NUMBER,
             value=str(int(facture["solde_restant"])),
         )
-        reference_field = champ_texte("Référence transaction (optionnel)", expand=True)
-        telephone_field = champ_texte("Téléphone utilisé (optionnel)", expand=True)
-        notes_field = champ_texte("Notes (optionnel)", expand=True, multiline=True, min_lines=2)
+        reference_field = champ_texte("Référence transaction (optionnel)")
+        telephone_field = champ_texte("Téléphone utilisé (optionnel)")
+        notes_field = champ_texte("Notes (optionnel)", multiline=True, min_lines=2)
 
         info_solde = ft.Text(
             f"Solde restant : {facture['solde_restant']:,.0f} FCFA / Total : {facture['montant_total']:,.0f} FCFA",
@@ -111,7 +111,7 @@ def FinanceView(page: ft.Page, client):
                 content=ft.Column([
                     info_solde,
                     canal_dd, montant_field, reference_field, telephone_field, notes_field,
-                ], spacing=10, tight=True),
+                ], spacing=10, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
                 width=largeur_contenu(page, 380),
             ),
             actions=[
@@ -129,16 +129,16 @@ def FinanceView(page: ft.Page, client):
         de la notification push opérateur) ; le client le saisit pour valider.
         """
         canal_dd = ft.Dropdown(
-            label="Opérateur *", expand=True,
+            label="Opérateur *",
             options=[
                 ft.dropdown.Option("MOBILE_MONEY", "Mobile Money (MTN)"),
                 ft.dropdown.Option("AIRTEL_MONEY", "Airtel Money"),
             ],
             value="MOBILE_MONEY",
         )
-        telephone_field = champ_texte("Numéro Mobile Money *", expand=True, hint_text="06 XXX XXXX")
+        telephone_field = champ_texte("Numéro Mobile Money *", hint_text="06 XXX XXXX")
         montant_field = champ_texte(
-            "Montant (FCFA) *", expand=True, keyboard_type=ft.KeyboardType.NUMBER,
+            "Montant (FCFA) *", keyboard_type=ft.KeyboardType.NUMBER,
             value=str(int(facture["solde_restant"])),
         )
         info_solde = ft.Text(
@@ -147,8 +147,8 @@ def FinanceView(page: ft.Page, client):
 
         loading = ft.ProgressRing(visible=False, width=18, height=18, stroke_width=2)
 
-        step1 = ft.Column([info_solde, canal_dd, telephone_field, montant_field], spacing=10, tight=True)
-        step2 = ft.Column(visible=False, spacing=10, tight=True)
+        step1 = ft.Column([info_solde, canal_dd, telephone_field, montant_field], spacing=10, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
+        step2 = ft.Column(visible=False, spacing=10, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
         transaction_courante = {"data": None}
 
@@ -175,7 +175,7 @@ def FinanceView(page: ft.Page, client):
                 transaction_courante["data"] = transaction
 
                 code_field = champ_texte(
-                    "Code de confirmation (6 chiffres)", expand=True,
+                    "Code de confirmation (6 chiffres)",
                     max_length=6, text_align=ft.TextAlign.CENTER,
                 )
                 info_attente = ft.Text(
@@ -234,7 +234,7 @@ def FinanceView(page: ft.Page, client):
                 ft.Text("Paiement Mobile Money / Airtel"),
             ]),
             content=ft.Container(
-                content=ft.Column([step1, step2, loading], spacing=14, tight=True),
+                content=ft.Column([step1, step2, loading], spacing=14, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
                 width=largeur_contenu(page, 380),
             ),
             actions=[
