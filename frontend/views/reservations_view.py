@@ -33,7 +33,7 @@ def ReservationsView(page: ft.Page, client):
     )
 
     def ouvrir_dialogue_rejet(reservation):
-        motif_field = ft.TextField(label="Motif du rejet", multiline=True, min_lines=2, expand=True)
+        motif_field = ft.TextField(label="Motif du rejet", multiline=True, min_lines=2)
 
         def confirmer_rejet(e):
             try:
