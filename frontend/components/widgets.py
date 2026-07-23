@@ -136,9 +136,10 @@ def afficher_snackbar(page: ft.Page, message: str, succes: bool = True):
 
 def champ_texte(label: str, **kwargs) -> ft.TextField:
     """TextField premium. N'impose plus de largeur fixe par défaut : le champ
-    remplit son parent (utiliser conteneur_formulaire() pour plafonner la
-    largeur sur grand écran). Si un width= explicite est passé, il est
-    respecté (rétro-compatibilité), mais préférez laisser vide + stretch.
+    s'étire pour remplir son parent grâce à horizontal_alignment=STRETCH sur
+    le Column englobant (voir conteneur_formulaire()) — PAS via expand=True,
+    qui sur un Column agit sur l'axe vertical et casse le rendu dans une
+    colonne défilante. Si un width= explicite est passé, il est respecté.
     """
     return ft.TextField(
         label=label,
@@ -146,7 +147,6 @@ def champ_texte(label: str, **kwargs) -> ft.TextField:
         focused_border_color=ft.colors.PRIMARY,
         border_radius=10,
         cursor_color=ft.colors.PRIMARY,
-        expand=kwargs.pop("expand", True) if "width" not in kwargs else None,
         **kwargs,
     )
 

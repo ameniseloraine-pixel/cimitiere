@@ -67,9 +67,8 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                 label="Nouveau statut",
                 value=statut,
                 options=[ft.dropdown.Option(k, v) for k, v in LIBELLES_STATUT.items()],
-                expand=True,
             )
-            raison_field = ft.TextField(label="Raison du changement", expand=True, multiline=True, min_lines=2)
+            raison_field = ft.TextField(label="Raison du changement", multiline=True, min_lines=2)
 
             def changer_statut(e):
                 try:
@@ -86,7 +85,7 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                 nouveau_statut_dd,
                 raison_field,
                 bouton_principal("Enregistrer", on_click=changer_statut, icone=ft.icons.SAVE),
-            ], spacing=10))
+            ], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH))
 
         dlg = ft.AlertDialog(
             title=ft.Row([

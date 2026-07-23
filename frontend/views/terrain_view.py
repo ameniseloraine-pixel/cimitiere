@@ -9,7 +9,8 @@ from components.widgets import (
     champ_texte, bouton_principal, afficher_snackbar,
     chargement, etat_vide, badge_generique,
 )
-from config import COULEUR_PRIMAIRE
+from config import COULEUR_PRIMAIRE, couleurs
+from responsive import est_mobile as _est_mobile, largeur_contenu
 
 
 TYPE_ZONE_OPTIONS = [
@@ -31,6 +32,7 @@ COULEUR_TYPE_ZONE = {
 
 def TerrainView(page: ft.Page, client):
     """Vue principale du module Terrain (Admin/Agent uniquement)."""
+    mobile = _est_mobile(page)
 
     # ─── État partagé ─────────────────────────────────────────────────────────
     state = {
@@ -54,24 +56,24 @@ def TerrainView(page: ft.Page, client):
         est_modif = cimetiere is not None
         titre = "Modifier le cimetière" if est_modif else "Créer un cimetière"
 
-        nom_f = champ_texte("Nom du cimetière *", width=350, value=cimetiere["nom"] if est_modif else "")
-        adresse_f = champ_texte("Adresse *", width=350, value=cimetiere["adresse"] if est_modif else "", multiline=True, min_lines=2)
-        ville_f = champ_texte("Ville *", width=350, value=cimetiere["ville"] if est_modif else "")
-        superficie_f = champ_texte("Superficie totale (m²) *", width=350,
+        nom_f = champ_texte("Nom du cimetière *", value=cimetiere["nom"] if est_modif else "")
+        adresse_f = champ_texte("Adresse *", value=cimetiere["adresse"] if est_modif else "", multiline=True, min_lines=2)
+        ville_f = champ_texte("Ville *", value=cimetiere["ville"] if est_modif else "")
+        superficie_f = champ_texte("Superficie totale (m²) *",
                                    keyboard_type=ft.KeyboardType.NUMBER,
                                    value=str(int(cimetiere["superficie_totale_m2"])) if est_modif else "")
-        longueur_f = champ_texte("Longueur standard tombeau (m)", width=170,
+        longueur_f = champ_texte("Longueur standard tombeau (m)", expand=True,
                                   keyboard_type=ft.KeyboardType.NUMBER,
                                   value=str(cimetiere["tombeau_longueur_m"]) if est_modif else "2.5")
-        largeur_f = champ_texte("Largeur standard tombeau (m)", width=170,
+        largeur_f = champ_texte("Largeur standard tombeau (m)", expand=True,
                                  keyboard_type=ft.KeyboardType.NUMBER,
                                  value=str(cimetiere["tombeau_largeur_m"]) if est_modif else "1.2")
-        pct_f = champ_texte("% chemins/non-exploitable (estimation initiale)", width=350,
+        pct_f = champ_texte("% chemins/non-exploitable (estimation initiale)",
                              keyboard_type=ft.KeyboardType.NUMBER,
                              value=str(cimetiere["pourcentage_chemins"]) if est_modif else "20",
                              helper_text="Ce % est utilisé avant la création des zones. Les zones prennent ensuite le relais.")
-        tel_f = champ_texte("Téléphone", width=350, value=cimetiere.get("telephone", "") if est_modif else "")
-        email_f = champ_texte("Email contact", width=350, value=cimetiere.get("email_contact", "") if est_modif else "")
+        tel_f = champ_texte("Téléphone", value=cimetiere.get("telephone", "") if est_modif else "")
+        email_f = champ_texte("Email contact", value=cimetiere.get("email_contact", "") if est_modif else "")
 
         def sauvegarder(e):
             if not nom_f.value or not adresse_f.value or not ville_f.value or not superficie_f.value:
@@ -113,8 +115,9 @@ def TerrainView(page: ft.Page, client):
                     ft.Text("Dimensions standard des tombeaux", size=13, weight=ft.FontWeight.W_600),
                     ft.Row([longueur_f, largeur_f], spacing=10),
                     superficie_f, pct_f, tel_f, email_f,
-                ], spacing=10, scroll=ft.ScrollMode.AUTO, tight=True),
-                width=380, height=480,
+                ], spacing=10, scroll=ft.ScrollMode.AUTO, tight=True,
+                   horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+                width=largeur_contenu(page, 380), height=480,
             ),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
@@ -200,17 +203,17 @@ def TerrainView(page: ft.Page, client):
 
     def ouvrir_dialogue_zone(zone=None):
         est_modif = zone is not None
-        nom_f = champ_texte("Nom de la zone *", width=320, value=zone["nom"] if est_modif else "")
-        code_f = champ_texte("Code (ex: A, B, C) *", width=150, value=zone["code"] if est_modif else "")
-        superficie_f = champ_texte("Superficie (m²) *", width=150,
+        nom_f = champ_texte("Nom de la zone *", value=zone["nom"] if est_modif else "")
+        code_f = champ_texte("Code (ex: A, B, C) *", expand=True, value=zone["code"] if est_modif else "")
+        superficie_f = champ_texte("Superficie (m²) *", expand=True,
                                     keyboard_type=ft.KeyboardType.NUMBER,
                                     value=str(int(zone["superficie_m2"])) if est_modif else "")
         type_dd = ft.Dropdown(
-            label="Type de zone *", width=320,
+            label="Type de zone *",
             options=[ft.dropdown.Option(k, v) for k, v in TYPE_ZONE_OPTIONS],
             value=zone["type_zone"] if est_modif else "EXPLOIT",
         )
-        description_f = champ_texte("Description", width=320,
+        description_f = champ_texte("Description",
                                      value=zone.get("description", "") if est_modif else "",
                                      multiline=True, min_lines=2)
 
@@ -259,8 +262,8 @@ def TerrainView(page: ft.Page, client):
                         ),
                         bgcolor="#f0f9ff", padding=8, border_radius=6,
                     ),
-                ], spacing=10, tight=True),
-                width=350,
+                ], spacing=10, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+                width=largeur_contenu(page, 350),
             ),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
@@ -375,7 +378,7 @@ def TerrainView(page: ft.Page, client):
                     ft.Container(expand=True),
                     ft.ElevatedButton("+ Nouvelle zone", icon=ft.icons.ADD,
                                       on_click=lambda e: ouvrir_dialogue_zone()),
-                ]),
+                ], wrap=True, spacing=8, run_spacing=8),
                 info_calcul,
                 ft.Divider(),
                 *([construire_carte_zone(z) for z in zones]
@@ -402,14 +405,14 @@ def TerrainView(page: ft.Page, client):
 
     def ouvrir_dialogue_bloc(bloc=None):
         est_modif = bloc is not None
-        nom_f = champ_texte("Nom du bloc *", width=300,
+        nom_f = champ_texte("Nom du bloc *",
                             value=bloc["nom"] if est_modif else "")
-        code_f = champ_texte("Code (ex: B1, B2) *", width=140,
+        code_f = champ_texte("Code (ex: B1, B2) *", expand=True,
                              value=bloc["code"] if est_modif else "")
-        rangees_f = champ_texte("Nombre de rangées *", width=140,
+        rangees_f = champ_texte("Nombre de rangées *", expand=True,
                                 keyboard_type=ft.KeyboardType.NUMBER,
                                 value=str(bloc["nombre_rangees"]) if est_modif else "5")
-        colonnes_f = champ_texte("Nombre de colonnes *", width=140,
+        colonnes_f = champ_texte("Nombre de colonnes *", expand=True,
                                   keyboard_type=ft.KeyboardType.NUMBER,
                                   value=str(bloc["nombre_colonnes"]) if est_modif else "4")
 
@@ -449,8 +452,8 @@ def TerrainView(page: ft.Page, client):
                         "La génération automatique crée un caveau pour chaque cellule de la grille.",
                         size=11, color="#6b7280",
                     ),
-                ], spacing=10, tight=True),
-                width=330,
+                ], spacing=10, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+                width=largeur_contenu(page, 330),
             ),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
@@ -460,11 +463,11 @@ def TerrainView(page: ft.Page, client):
         page.open(dlg)
 
     def ouvrir_dialogue_generation(bloc: dict):
-        lat_f = champ_texte("Latitude origine GPS", width=200,
+        lat_f = champ_texte("Latitude origine GPS", expand=True,
                              keyboard_type=ft.KeyboardType.NUMBER, value="0.0")
-        lon_f = champ_texte("Longitude origine GPS", width=200,
+        lon_f = champ_texte("Longitude origine GPS", expand=True,
                              keyboard_type=ft.KeyboardType.NUMBER, value="0.0")
-        esp_f = champ_texte("Espacement entre caveaux (m)", width=200,
+        esp_f = champ_texte("Espacement entre caveaux (m)",
                              keyboard_type=ft.KeyboardType.NUMBER, value="0.5")
 
         def generer(e):
@@ -502,8 +505,8 @@ def TerrainView(page: ft.Page, client):
                     ),
                     ft.Row([lat_f, lon_f], spacing=10),
                     esp_f,
-                ], spacing=10, tight=True),
-                width=360,
+                ], spacing=10, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+                width=largeur_contenu(page, 360),
             ),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
@@ -569,7 +572,7 @@ def TerrainView(page: ft.Page, client):
                     ft.Container(expand=True),
                     ft.ElevatedButton("+ Nouveau bloc", icon=ft.icons.ADD,
                                       on_click=lambda e: ouvrir_dialogue_bloc()),
-                ]),
+                ], wrap=True, spacing=8, run_spacing=8),
                 ft.Container(
                     content=ft.Row([
                         _stat("Blocs", str(len(blocs))),
@@ -613,16 +616,16 @@ def TerrainView(page: ft.Page, client):
     return ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text("Gestion du terrain", size=20, weight=ft.FontWeight.BOLD),
+                ft.Text("Gestion du terrain", size=17 if mobile else 20, weight=ft.FontWeight.BOLD),
                 ft.Container(expand=True),
                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger_cimetieres(),
                               tooltip="Actualiser"),
-            ]),
+            ], wrap=True),
             ft.Divider(),
             zone_cimetiere,
             zone_zones,
             zone_blocs,
-        ], spacing=10, expand=True),
-        padding=20,
+        ], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO),
+        padding=12 if mobile else 20,
         expand=True,
     )
