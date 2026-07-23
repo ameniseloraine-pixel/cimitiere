@@ -191,6 +191,14 @@ def TerrainView(page: ft.Page, client):
                 ], spacing=12)
         except APIError as err:
             zone_cimetiere.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)
+        except Exception as err:
+            # Toute autre erreur (champ manquant, réponse inattendue, etc.)
+            # doit rester visible au lieu de laisser l'écran figé/vide.
+            import traceback
+            traceback.print_exc()
+            zone_cimetiere.content = etat_vide(
+                f"Erreur inattendue : {err}", ft.icons.ERROR_OUTLINE
+            )
         page.update()
 
     # ═══════════════════════════════════════════════════════════════════════════
