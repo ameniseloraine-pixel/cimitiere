@@ -3,21 +3,40 @@ Services utilisateurs — MFA, JWT, Emails
 """
 
 import jwt
+import logging
 import requests
+import threading
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.conf import settings
 
 from .models import Utilisateur, CodeMFA
 
+logger = logging.getLogger(__name__)
+
 
 def generer_et_envoyer_code_mfa(user: Utilisateur) -> CodeMFA:
     """
-    Génère un code MFA à 6 chiffres et l'envoie par email.
-    Invalide les anciens codes non utilisés.
+    Génère un code MFA à 6 chiffres et l'envoie par email en arrière-plan.
+
+    L'envoi passe par un thread daemon (pas Celery : aucun worker Celery
+    n'est déployé sur Render pour ce projet, donc une tâche Celery ne
+    serait jamais traitée). Le thread est entouré d'un try/except large :
+    quoi qu'il arrive côté Brevo (clé invalide, timeout, panne réseau),
+    la requête de login ne plante jamais et répond normalement.
     """
     CodeMFA.objects.filter(utilisateur=user, utilise=False).update(utilise=True)
     code_mfa = CodeMFA.objects.create(utilisateur=user)
-    _envoyer_email_mfa(user, code_mfa.code)
+
+    def _envoyer_en_arriere_plan():
+        try:
+            _envoyer_email_mfa(user, code_mfa.code)
+        except Exception:
+            # Ne doit jamais remonter jusqu'à la requête HTTP : on journalise
+            # seulement. Si l'email échoue, l'utilisateur peut cliquer sur
+            # "Renvoyer le code" depuis l'écran MFA.
+            logger.exception("Échec de l'envoi du code MFA à %s", user.email)
+
+    threading.Thread(target=_envoyer_en_arriere_plan, daemon=True).start()
     return code_mfa
 
 
