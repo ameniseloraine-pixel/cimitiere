@@ -24,7 +24,7 @@ COULEUR_ROLE = {
 def UtilisateursView(page: ft.Page, client):
     mobile = _est_mobile(page)
     t = couleurs(page)
-    content_area = ft.Container(content=chargement("Chargement des utilisateurs..."), expand=True)
+    content_area = ft.Container(content=chargement("Chargement des utilisateurs..."))
 
     if not client.is_admin:
         return ft.Container(
@@ -135,7 +135,7 @@ def UtilisateursView(page: ft.Page, client):
         if mobile:
             return ft.Column(
                 [carte_utilisateur_mobile(u) for u in utilisateurs],
-                spacing=10, scroll=ft.ScrollMode.AUTO, expand=True,
+                spacing=10,
             )
 
         return ft.Column([
@@ -147,7 +147,7 @@ def UtilisateursView(page: ft.Page, client):
             ], spacing=10),
             ft.Divider(color=t["bordure"]),
             *[ligne_utilisateur_desktop(u) for u in utilisateurs],
-        ], spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+        ], spacing=10)
 
     def charger_utilisateurs():
         content_area.content = chargement("Chargement...")

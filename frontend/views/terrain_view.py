@@ -43,7 +43,7 @@ def TerrainView(page: ft.Page, client):
     }
 
     # ─── Zones de contenu ──────────────────────────────────────────────────────
-    zone_cimetiere = ft.Container(expand=True)
+    zone_cimetiere = ft.Container()
     zone_zones = ft.Container(visible=False)
     zone_blocs = ft.Container(visible=False)
 
@@ -188,7 +188,7 @@ def TerrainView(page: ft.Page, client):
                                           on_click=lambda e: ouvrir_dialogue_cimetiere()),
                     ]),
                     *[construire_carte_cimetiere(c) for c in cimetieres],
-                ], spacing=12, scroll=ft.ScrollMode.AUTO, expand=True)
+                ], spacing=12)
         except APIError as err:
             zone_cimetiere.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)
         page.update()
@@ -383,7 +383,7 @@ def TerrainView(page: ft.Page, client):
                 ft.Divider(),
                 *([construire_carte_zone(z) for z in zones]
                   if zones else [etat_vide("Aucune zone créée.", ft.icons.GRID_VIEW)]),
-            ], spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+            ], spacing=10)
 
             zone_zones.content = contenu_zones
         except APIError as err:
@@ -590,7 +590,7 @@ def TerrainView(page: ft.Page, client):
                 ft.Divider(),
                 *([construire_carte_bloc(b) for b in blocs]
                   if blocs else [etat_vide("Aucun bloc créé.", ft.icons.TABLE_CHART)]),
-            ], spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+            ], spacing=10)
 
         except APIError as err:
             zone_blocs.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)

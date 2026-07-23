@@ -12,7 +12,7 @@ from responsive import est_mobile as _est_mobile
 
 
 def DashboardView(page: ft.Page, client):
-    content_area = ft.Container(content=chargement("Chargement du tableau de bord..."), expand=True)
+    content_area = ft.Container(content=chargement("Chargement du tableau de bord..."))
     est_mobile = _est_mobile(page)
     t = couleurs(page)
 
@@ -122,7 +122,7 @@ def DashboardView(page: ft.Page, client):
 
             sections.append(tableau_blocs(data.get("par_bloc", [])))
 
-            content_area.content = ft.Column(sections, spacing=16, scroll=ft.ScrollMode.AUTO, expand=True)
+            content_area.content = ft.Column(sections, spacing=16)
 
         except APIError as err:
             content_area.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)

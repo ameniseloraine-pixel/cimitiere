@@ -17,7 +17,7 @@ from responsive import est_mobile as _est_mobile, largeur_contenu
 
 def ReservationsView(page: ft.Page, client):
     mobile = _est_mobile(page)
-    content_area = ft.Container(content=chargement("Chargement des réservations..."), expand=True)
+    content_area = ft.Container(content=chargement("Chargement des réservations..."))
     filtre_statut = ft.Dropdown(
         label="Filtrer par statut",
         width=largeur_contenu(page, 220, marge=24) if mobile else 220,
@@ -172,7 +172,7 @@ def ReservationsView(page: ft.Page, client):
             else:
                 content_area.content = ft.Column(
                     [construire_carte_reservation(r) for r in reservations],
-                    spacing=10, scroll=ft.ScrollMode.AUTO, expand=True,
+                    spacing=10,
                 )
         except APIError as err:
             content_area.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)

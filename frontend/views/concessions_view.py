@@ -27,7 +27,7 @@ TYPES_CONCESSION = [
 
 
 def ConcessionsView(page: ft.Page, client):
-    tabs_content = ft.Container(expand=True)
+    tabs_content = ft.Container()
     mobile = _est_mobile(page)
     largeur_dialogue = largeur_contenu(page, 380)
 
@@ -197,7 +197,7 @@ def ConcessionsView(page: ft.Page, client):
             bgcolor=ft.colors.SURFACE, padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
         )
 
-    concessions_content = ft.Container(content=chargement("Chargement..."), expand=True)
+    concessions_content = ft.Container(content=chargement("Chargement..."))
     filtre_alerte = ft.Checkbox(label="Alertes uniquement (< 90 jours)", on_change=lambda e: charger_concessions())
 
     def charger_concessions():
@@ -210,7 +210,7 @@ def ConcessionsView(page: ft.Page, client):
             else:
                 concessions_content.content = ft.Column(
                     [construire_carte_concession(c) for c in concessions],
-                    spacing=10, scroll=ft.ScrollMode.AUTO, expand=True,
+                    spacing=10,
                 )
         except APIError as err:
             concessions_content.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)
@@ -298,7 +298,7 @@ def ConcessionsView(page: ft.Page, client):
             bgcolor=ft.colors.SURFACE, padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
         )
 
-    exhumations_content = ft.Container(content=chargement("Chargement..."), expand=True)
+    exhumations_content = ft.Container(content=chargement("Chargement..."))
 
     def charger_exhumations():
         exhumations_content.content = chargement("Chargement des exhumations...")
@@ -310,7 +310,7 @@ def ConcessionsView(page: ft.Page, client):
             else:
                 exhumations_content.content = ft.Column(
                     [construire_carte_exhumation(ex) for ex in exhumations],
-                    spacing=10, scroll=ft.ScrollMode.AUTO, expand=True,
+                    spacing=10,
                 )
         except APIError as err:
             exhumations_content.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)
@@ -321,7 +321,7 @@ def ConcessionsView(page: ft.Page, client):
     def on_tab_change(e):
         if e.control.selected_index == 0:
             charger_concessions()
-            tabs_content.content = ft.Column([filtre_alerte, concessions_content], spacing=10, expand=True)
+            tabs_content.content = ft.Column([filtre_alerte, concessions_content], spacing=10)
         else:
             charger_exhumations()
             tabs_content.content = exhumations_content
@@ -337,7 +337,7 @@ def ConcessionsView(page: ft.Page, client):
     )
 
     charger_concessions()
-    tabs_content.content = ft.Column([filtre_alerte, concessions_content], spacing=10, expand=True)
+    tabs_content.content = ft.Column([filtre_alerte, concessions_content], spacing=10)
 
     # NOUVEAU : bouton "Créer une concession", visible pour Admin/Secrétariat uniquement
     bouton_creer = ft.ElevatedButton(

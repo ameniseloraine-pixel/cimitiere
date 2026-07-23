@@ -30,7 +30,7 @@ CANAUX_PAIEMENT = [
 
 def FinanceView(page: ft.Page, client):
     mobile = _est_mobile(page)
-    content_area = ft.Container(content=chargement("Chargement des factures..."), expand=True)
+    content_area = ft.Container(content=chargement("Chargement des factures..."))
     filtre_statut = ft.Dropdown(
         label="Filtrer par statut",
         width=largeur_contenu(page, 220, marge=24) if mobile else 220,
@@ -375,7 +375,7 @@ def FinanceView(page: ft.Page, client):
             else:
                 content_area.content = ft.Column(
                     [construire_carte_facture(f) for f in factures],
-                    spacing=10, scroll=ft.ScrollMode.AUTO, expand=True,
+                    spacing=10,
                 )
         except APIError as err:
             content_area.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)
