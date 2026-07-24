@@ -5,9 +5,6 @@ Vue Finance — Factures et paiements multi-canal
 NOUVEAU : bouton "Télécharger le PDF" sur chaque facture
 """
 
-import os
-import tempfile
-import webbrowser
 import flet as ft
 
 from api_client import APIError
@@ -15,7 +12,7 @@ from components.widgets import (
     badge_generique, afficher_snackbar, chargement, etat_vide,
     bouton_principal, champ_texte, COULEURS_STATUT_FACTURE,
 )
-from config import COULEUR_PRIMAIRE
+from config import COULEUR_PRIMAIRE, API_BASE_URL
 
 
 CANAUX_PAIEMENT = [
@@ -43,17 +40,27 @@ def FinanceView(page: ft.Page, client):
         on_change=lambda e: charger(),
     )
 
-    # NOUVEAU : téléchargement et ouverture du PDF
+    # NOUVEAU : ouverture du PDF dans un nouvel onglet du navigateur du client.
+    #
+    # CORRECTIF (faille précédente) : l'ancienne version téléchargeait les
+    # octets du PDF côté serveur (client.telecharger_facture_pdf), les
+    # écrivait dans un fichier temporaire DU SERVEUR, puis appelait
+    # webbrowser.open("file:///...") — qui essaie d'ouvrir un navigateur
+    # sur le serveur Render (headless, sans interface graphique). En mode
+    # Flet Web (view=ft.AppView.WEB_BROWSER), tout le code Python s'exécute
+    # côté serveur : le PDF n'atteignait donc jamais le client, sans la
+    # moindre erreur visible (webbrowser.open() échoue silencieusement).
+    #
+    # Corrigé ici en demandant au navigateur DU CLIENT (via page.launch_url,
+    # qui envoie l'ordre d'ouverture au client via le websocket Flet)
+    # d'ouvrir directement l'URL de l'endpoint PDF du backend. Le token
+    # JWT est passé en paramètre d'URL car un lien de navigateur classique
+    # ne peut pas envoyer de header Authorization (voir auth_telechargement
+    # côté backend, apps/users/api.py).
     def telecharger_pdf(facture: dict):
         try:
-            pdf_bytes = client.telecharger_facture_pdf(facture["id"])
-            chemin_fichier = os.path.join(tempfile.gettempdir(), f"{facture['numero_facture']}.pdf")
-            with open(chemin_fichier, "wb") as f:
-                f.write(pdf_bytes)
-            webbrowser.open(f"file:///{chemin_fichier}")
-            afficher_snackbar(page, "Facture PDF ouverte.", succes=True)
-        except APIError as err:
-            afficher_snackbar(page, err.detail, succes=False)
+            url = f"{API_BASE_URL}/finance/factures/{facture['id']}/pdf?token={client.access_token}"
+            page.launch_url(url)
         except Exception:
             afficher_snackbar(page, "Impossible d'ouvrir le PDF.", succes=False)
 
