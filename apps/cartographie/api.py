@@ -7,6 +7,7 @@ Stockage spatial : PostGIS (PointField, SRID 4326)
 from typing import List, Optional
 from ninja import Router, Schema
 from django.http import HttpResponse
+from django.views.decorators.clickjacking import xframe_options_exempt
 
 from apps.users.api import auth
 from apps.users.models import RoleUtilisateur, Utilisateur
@@ -217,6 +218,7 @@ def _generer_html_carte(caveaux_geo: list) -> str:
 
 
 @router.get("/carte-html", auth=None)
+@xframe_options_exempt
 def carte_html(
     request,
     token: str,
@@ -226,6 +228,8 @@ def carte_html(
 ):
     """
     Sert la carte GPS en HTML autonome, via une vraie URL.
+    Exemptée de X-Frame-Options : elle doit pouvoir être intégrée dans la
+    WebView du frontend Flet, hébergé sur un domaine différent (Render).
     Le token JWT est passé en paramètre d'URL (le contrôle WebView ne peut
     pas envoyer de header Authorization), et vérifié manuellement ici.
     """
