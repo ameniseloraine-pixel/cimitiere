@@ -55,7 +55,11 @@ def LoginView(page: ft.Page, client, on_login_success, on_go_register):
             mfa_info_text.value = result.get("message", f"Code envoyé à {email}")
             step1_container.visible = False
             step2_container.visible = True
-            mfa_field.focus()
+            page.update()
+            try:
+                mfa_field.focus()
+            except Exception:
+                pass
         except APIError as err:
             afficher_snackbar(page, err.detail, succes=False)
         finally:

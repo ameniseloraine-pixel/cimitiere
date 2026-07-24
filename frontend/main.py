@@ -55,6 +55,14 @@ def main(page: ft.Page):
             btn_theme.tooltip = "Passer en mode sombre"
         page.bgcolor = couleurs(page)["fond"]
 
+        # Garde-fou : si la session a expiré (client.user devenu None) alors
+        # que le shell est encore affiché, on ne tente pas de reconstruire
+        # l'en-tête (qui a besoin de client.user) — on renvoie proprement
+        # vers l'écran de connexion plutôt que de planter.
+        if app_shell.visible and client.user is None:
+            afficher_login()
+            return
+
         # Les composants "premium" figent la couleur au moment de leur
         # construction (et non via des tokens de thème Flet en direct) afin
         # de garder un contrôle fin sur la palette. On reconstruit donc le
@@ -127,6 +135,13 @@ def main(page: ft.Page):
     nav_rail_ref = {"rail": None, "bar": None, "routes": []}
 
     def construire_app_shell():
+        if client.user is None:
+            # Session expirée / utilisateur non chargé : impossible de
+            # construire l'en-tête (avatar, nom...). On évite le crash en
+            # renvoyant proprement vers l'écran de connexion.
+            afficher_login()
+            return
+
         t = couleurs(page)
         user = client.user
         est_mobile = page.width is not None and page.width < SEUIL_MOBILE
