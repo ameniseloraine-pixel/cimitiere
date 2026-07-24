@@ -46,7 +46,7 @@ def main(page: ft.Page):
     def basculer_theme(e):
         if page.theme_mode == ft.ThemeMode.LIGHT:
             page.theme_mode = ft.ThemeMode.DARK
-            page.bgcolor = "#111827"
+            page.bgcolor = "#161a23"
             btn_theme.icon = ft.icons.LIGHT_MODE
             btn_theme.tooltip = "Passer en mode clair"
         else:
@@ -119,6 +119,7 @@ def main(page: ft.Page):
 
     def deconnexion(e=None):
         client.logout()
+        app_shell.visible = False
         afficher_login()
 
     # ─── Construction du shell applicatif (menu + contenu) ──────────────────────
@@ -127,6 +128,13 @@ def main(page: ft.Page):
 
     def construire_app_shell():
         user = client.user
+        if user is None:
+            # Garde-fou : ne doit normalement jamais arriver, mais si l'état
+            # devient incohérent (session expirée, etc.), on renvoie proprement
+            # vers le login au lieu de planter sur user["prenom"].
+            app_shell.visible = False
+            afficher_login()
+            return
         est_mobile = page.width is not None and page.width < SEUIL_MOBILE
 
         # Items de menu selon le rôle (RBAC)
@@ -200,22 +208,64 @@ def main(page: ft.Page):
         nav_rail_ref["rail"] = nav_rail
         nav_rail_ref["bar"] = nav_bar
 
+        # ── Menu burger (mobile) : tiroir avec libellés toujours visibles ──────
+        def on_drawer_change(e):
+            idx = e.control.selected_index
+            if idx is None:
+                return
+            etat_nav["route_index"] = idx
+            naviguer(routes[idx])
+            page.update()
+
+        menu_drawer = ft.NavigationDrawer(
+            selected_index=index_selectionne,
+            on_change=on_drawer_change,
+            controls=[
+                ft.Container(
+                    padding=ft.padding.symmetric(horizontal=16, vertical=16),
+                    content=ft.Row([
+                        ft.Icon(ft.icons.ACCOUNT_CIRCLE, color="#6b7280", size=32),
+                        ft.Column([
+                            ft.Text(user["prenom"] + " " + user["nom"], size=14, weight=ft.FontWeight.W_600),
+                            ft.Text(_libelle_role(user["role"]), size=12, color="#6b7280"),
+                        ], spacing=0),
+                    ], spacing=10),
+                ),
+                ft.Divider(height=1),
+                *[
+                    ft.NavigationDrawerDestination(icon=icon, selected_icon=sel_icon, label=label)
+                    for (_, icon, sel_icon, label) in items
+                ],
+            ],
+        )
+        page.drawer = menu_drawer
+
+        def ouvrir_menu(e=None):
+            page.drawer.open = True
+            page.update()
+
         header = ft.Container(
             content=ft.Row([
                 ft.Row([
+                    # Bouton burger : uniquement utile en mobile (le rail
+                    # latéral suffit sur desktop, donc il reste caché).
+                    ft.IconButton(
+                        icon=ft.icons.MENU,
+                        tooltip="Menu",
+                        on_click=ouvrir_menu,
+                        visible=est_mobile,
+                    ) if est_mobile else ft.Container(width=0),
                     ft.Icon(ft.icons.LOCATION_CITY, color=COULEUR_PRIMAIRE, size=26),
-                    # Titre masqué sur très petit écran pour laisser de la place
                     ft.Text(
-                        "Gestion de Cimetière",
-                        size=18,
+                        "Gestion de Cimetière" if not est_mobile else "Cimetière",
+                        size=18 if not est_mobile else 15,
                         weight=ft.FontWeight.BOLD,
                         color=COULEUR_SECONDAIRE,
-                        visible=not est_mobile,
                     ),
                 ], spacing=8),
                 ft.Container(expand=True),
                 ft.Row([
-                    ft.Icon(ft.icons.ACCOUNT_CIRCLE, color="#6b7280"),
+                    ft.Icon(ft.icons.ACCOUNT_CIRCLE, color="#6b7280", visible=not est_mobile),
                     ft.Column([
                         ft.Text(user["prenom"] + " " + user["nom"], size=13, weight=ft.FontWeight.W_600),
                         ft.Text(_libelle_role(user["role"]), size=11, color="#6b7280"),
