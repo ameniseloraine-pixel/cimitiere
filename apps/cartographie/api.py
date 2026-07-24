@@ -6,9 +6,11 @@ Stockage spatial : PostGIS (PointField, SRID 4326)
 
 from typing import List, Optional
 from ninja import Router, Schema
+from django.http import HttpResponse
 
 from apps.users.api import auth
-from apps.users.models import RoleUtilisateur
+from apps.users.models import RoleUtilisateur, Utilisateur
+from apps.users.services import verifier_token_jwt
 from .models import Caveau, StatutCaveau, JournalModificationCaveau
 
 router = Router()
@@ -127,10 +129,8 @@ def changer_statut_caveau(request, caveau_id: int, data: ChangerStatutSchema):
 
     ancien_statut = caveau.statut
 
-    # Changer le statut avec audit
     caveau.changer_statut(data.statut, utilisateur=request.auth, raison=data.raison)
 
-    # Journaliser dans la table immuable
     JournalModificationCaveau.objects.create(
         caveau=caveau,
         utilisateur=request.auth,
@@ -167,3 +167,97 @@ def statistiques_carte(request):
         "occupes": stats_statut.get(StatutCaveau.OCCUPE, 0),
         "reserves": stats_statut.get(StatutCaveau.RESERVE, 0),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NOUVEAU : page HTML de la carte GPS, servie par une vraie URL (corrige le bug
+# où les navigateurs bloquent le chargement d'URL "data:" dans une WebView)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _generer_html_carte(caveaux_geo: list) -> str:
+    if not caveaux_geo:
+        return """
+        <html><body style="font-family:sans-serif;text-align:center;
+        padding-top:60px;color:#6b7280">
+        Aucun caveau ne possède de coordonnées GPS pour le moment.
+        </body></html>
+        """
+
+    lat_centre = caveaux_geo[0]["latitude"]
+    lng_centre = caveaux_geo[0]["longitude"]
+
+    markers_js = ""
+    for c in caveaux_geo:
+        popup = f"{c['reference']} — {c['statut']}".replace('"', "'")
+        markers_js += f"""
+        L.circleMarker([{c['latitude']}, {c['longitude']}], {{
+            radius: 9, color: "{c['couleur']}", fillColor: "{c['couleur']}", fillOpacity: 0.9, weight: 2
+        }}).addTo(map).bindPopup("{popup}");
+        """
+
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+      <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+      <style>#map {{ height: 100vh; width: 100%; }} body {{ margin: 0; }}</style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map').setView([{lat_centre}, {lng_centre}], 17);
+        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png').addTo(map);
+        {markers_js}
+      </script>
+    </body>
+    </html>
+    """
+
+
+@router.get("/carte-html", auth=None)
+def carte_html(
+    request,
+    token: str,
+    statut: Optional[str] = None,
+    zone_code: Optional[str] = None,
+    bloc_code: Optional[str] = None,
+):
+    """
+    Sert la carte GPS en HTML autonome, via une vraie URL.
+    Le token JWT est passé en paramètre d'URL (le contrôle WebView ne peut
+    pas envoyer de header Authorization), et vérifié manuellement ici.
+    """
+    payload = verifier_token_jwt(token)
+    if not payload:
+        return HttpResponse(
+            "<html><body style='font-family:sans-serif;text-align:center;padding-top:60px'>"
+            "Session expirée. Reconnectez-vous puis réessayez.</body></html>",
+            content_type="text/html", status=401,
+        )
+    if not Utilisateur.objects.filter(id=payload["user_id"]).exists():
+        return HttpResponse("Utilisateur introuvable.", content_type="text/html", status=401)
+
+    qs = Caveau.objects.select_related("bloc__zone__cimetiere").exclude(localisation=None)
+    if statut:
+        qs = qs.filter(statut=statut)
+    if zone_code:
+        qs = qs.filter(bloc__zone__code=zone_code)
+    if bloc_code:
+        qs = qs.filter(bloc__code=bloc_code)
+
+    caveaux_geo = [
+        {
+            "reference": c.reference_complete,
+            "statut": c.statut,
+            "couleur": c.couleur_carte,
+            "latitude": float(c.latitude),
+            "longitude": float(c.longitude),
+        }
+        for c in qs
+        if c.latitude is not None and c.longitude is not None
+    ]
+
+    html = _generer_html_carte(caveaux_geo)
+    return HttpResponse(html, content_type="text/html")
