@@ -3,6 +3,7 @@ API Réservations — Workflow complet de réservation
 Client soumet → Admin valide/rejette → Facture auto générée → Email envoyé
 """
 
+import logging
 from typing import List, Optional
 from datetime import date
 from ninja import Router, Schema
@@ -15,6 +16,7 @@ from apps.cartographie.models import Caveau, StatutCaveau, JournalModificationCa
 from .models import Reservation, Defunt, StatutReservation
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -273,18 +275,50 @@ def _notifier_nouvelle_reservation(reservation: Reservation):
         from apps.notifications.tasks import envoyer_notification_nouvelle_reservation
         envoyer_notification_nouvelle_reservation.delay(reservation.id)
     except Exception:
-        pass  # Celery optionnel en dev
+        logger.exception(
+            "Échec de la notification 'nouvelle réservation' pour %s",
+            reservation.numero_dossier,
+        )
 
 
 def _generer_facture_et_notifier(reservation: Reservation):
-    """Génère la facture PDF et envoie les emails de confirmation."""
+    """
+    Génère la facture PDF et envoie les emails de confirmation.
+
+    CORRECTIF (faille précédente) : un unique `except Exception: pass`
+    entourait à la fois la création de la facture ET l'envoi de l'email.
+    Si Celery/le broker n'était pas disponible (ou toute autre erreur),
+    TOUT échouait en silence — y compris la création de la facture —
+    sans aucune trace, ni pour l'admin ni pour le client.
+
+    Corrigé ici :
+      1. La création de la facture (rapide, synchrone, critique) n'est
+         plus protégée par un except qui masque l'erreur : si elle
+         échoue, l'exception est loggée avec la trace complète, pour
+         qu'on puisse la voir et la corriger.
+      2. L'envoi de l'email (accessoire, peut échouer sans bloquer le
+         workflow) reste protégé séparément, mais logge aussi l'erreur
+         au lieu de l'avaler.
+    """
+    from apps.finance.services import creer_facture_pour_reservation
+
     try:
-        from apps.finance.services import creer_facture_pour_reservation
-        from apps.notifications.tasks import envoyer_confirmation_reservation
         facture = creer_facture_pour_reservation(reservation)
+    except Exception:
+        logger.exception(
+            "Échec de la génération de facture pour la réservation %s (id=%s)",
+            reservation.numero_dossier, reservation.id,
+        )
+        return  # Pas de facture -> pas d'email à envoyer, mais l'erreur est visible dans les logs
+
+    try:
+        from apps.notifications.tasks import envoyer_confirmation_reservation
         envoyer_confirmation_reservation.delay(reservation.id, facture.id)
     except Exception:
-        pass
+        logger.exception(
+            "Facture %s créée mais échec de l'envoi de l'email de confirmation (réservation %s)",
+            facture.numero_facture, reservation.numero_dossier,
+        )
 
 
 def _notifier_rejet(reservation: Reservation, motif: str):
@@ -293,4 +327,7 @@ def _notifier_rejet(reservation: Reservation, motif: str):
         from apps.notifications.tasks import envoyer_notification_rejet
         envoyer_notification_rejet.delay(reservation.id, motif)
     except Exception:
-        pass
+        logger.exception(
+            "Échec de la notification de rejet pour %s",
+            reservation.numero_dossier,
+        )
