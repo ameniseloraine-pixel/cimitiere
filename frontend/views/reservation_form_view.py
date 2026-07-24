@@ -8,8 +8,7 @@ from datetime import datetime, date
 
 from api_client import APIError
 from components.widgets import champ_texte, bouton_principal, afficher_snackbar
-from config import couleurs
-from responsive import est_mobile as _est_mobile
+from config import COULEUR_PRIMAIRE
 
 
 def ReservationFormView(page: ft.Page, client, caveau: dict, on_submitted, on_cancel):
@@ -18,27 +17,22 @@ def ReservationFormView(page: ft.Page, client, caveau: dict, on_submitted, on_ca
     on_submitted(reservation: dict) : callback appelé après succès.
     on_cancel() : callback pour annuler / revenir à la carte.
     """
-    t = couleurs(page)
-    mobile = _est_mobile(page)
 
     # ─── Champs Défunt ─────────────────────────────────────────────────────────
-    # Pas de width= fixe : chaque champ prend la largeur de sa colonne dans le
-    # ResponsiveRow (col={"xs": 12, "sm": 6} => pleine largeur sur téléphone,
-    # moitié sur écran plus grand).
-    nom_field = champ_texte("Nom du défunt *", autofocus=True)
-    prenom_field = champ_texte("Prénom du défunt *")
+    nom_field = champ_texte("Nom du défunt *", width=300, autofocus=True)
+    prenom_field = champ_texte("Prénom du défunt *", width=300)
 
-    date_naissance_field = champ_texte("Date de naissance (JJ/MM/AAAA)")
-    date_deces_field = champ_texte("Date de décès * (JJ/MM/AAAA)")
-    lieu_deces_field = champ_texte("Lieu de décès")
-    nationalite_field = champ_texte("Nationalité")
-    acte_deces_field = champ_texte("N° acte de décès")
+    date_naissance_field = champ_texte("Date de naissance (JJ/MM/AAAA)", width=300)
+    date_deces_field = champ_texte("Date de décès * (JJ/MM/AAAA)", width=300)
+    lieu_deces_field = champ_texte("Lieu de décès", width=300)
+    nationalite_field = champ_texte("Nationalité", width=300)
+    acte_deces_field = champ_texte("N° acte de décès", width=300)
 
     # ─── Réservation ─────────────────────────────────────────────────────────
-    date_inhumation_field = champ_texte("Date d'inhumation souhaitée (JJ/MM/AAAA)")
-    notes_field = champ_texte("Remarques / Notes (optionnel)", multiline=True, min_lines=3)
+    date_inhumation_field = champ_texte("Date d'inhumation souhaitée (JJ/MM/AAAA)", width=300)
+    notes_field = champ_texte("Remarques / Notes (optionnel)", width=620, multiline=True, min_lines=3)
 
-    loading = ft.ProgressRing(visible=False, width=20, height=20, stroke_width=2, color=t["accent"])
+    loading = ft.ProgressRing(visible=False, width=20, height=20, stroke_width=2)
 
     def _parse_date(value: str, champ_label: str) -> str | None:
         """Convertit JJ/MM/AAAA en AAAA-MM-JJ (format ISO attendu par l'API)."""
@@ -52,6 +46,7 @@ def ReservationFormView(page: ft.Page, client, caveau: dict, on_submitted, on_ca
             raise ValueError(f"Format de date invalide pour « {champ_label} ». Utilisez JJ/MM/AAAA.")
 
     def soumettre(e):
+        # Validation des champs obligatoires
         if not nom_field.value or not prenom_field.value or not date_deces_field.value:
             afficher_snackbar(page, "Les champs marqués * sont obligatoires.", succes=False)
             return
@@ -103,38 +98,38 @@ def ReservationFormView(page: ft.Page, client, caveau: dict, on_submitted, on_ca
             submit_btn.disabled = False
             page.update()
 
-    submit_btn = bouton_principal("Soumettre la demande", on_click=soumettre, icone=ft.icons.SEND)
-    cancel_btn = ft.OutlinedButton("Annuler", on_click=lambda e: on_cancel())
+    submit_btn = bouton_principal("Soumettre la demande", on_click=soumettre, icone=ft.icons.SEND, width=300)
+    cancel_btn = ft.OutlinedButton("Annuler", on_click=lambda e: on_cancel(), width=150)
 
     return ft.Container(
         content=ft.Column([
             ft.Row([
                 ft.IconButton(ft.icons.ARROW_BACK, on_click=lambda e: on_cancel(), tooltip="Retour à la carte"),
-                ft.Text("Demande de réservation", size=18 if mobile else 20, weight=ft.FontWeight.BOLD, color=t["texte"]),
+                ft.Text("Demande de réservation", size=20, weight=ft.FontWeight.BOLD),
             ]),
             ft.Container(
                 content=ft.Row([
-                    ft.Icon(ft.icons.PLACE, color=t["accent"]),
-                    ft.Text(f"Caveau sélectionné : {caveau['reference']}", weight=ft.FontWeight.W_600, color=t["texte"]),
-                ], wrap=True),
-                bgcolor=ft.colors.with_opacity(0.10, "#22c55e"),
+                    ft.Icon(ft.icons.PLACE, color=COULEUR_PRIMAIRE),
+                    ft.Text(f"Caveau sélectionné : {caveau['reference']}", weight=ft.FontWeight.W_600),
+                ]),
+                bgcolor="#f0fdf4",
                 padding=12,
                 border_radius=8,
-                border=ft.border.all(1, ft.colors.with_opacity(0.30, "#22c55e")),
+                border=ft.border.all(1, "#bbf7d0"),
             ),
-            ft.Divider(color=t["bordure"]),
-            ft.Text("Informations sur le défunt", size=15, weight=ft.FontWeight.W_600, color=t["texte"]),
+            ft.Divider(),
+            ft.Text("Informations sur le défunt", size=15, weight=ft.FontWeight.W_600),
             ft.ResponsiveRow([
-                ft.Container(nom_field, col={"xs": 12, "sm": 6}),
-                ft.Container(prenom_field, col={"xs": 12, "sm": 6}),
-                ft.Container(date_naissance_field, col={"xs": 12, "sm": 6}),
-                ft.Container(date_deces_field, col={"xs": 12, "sm": 6}),
-                ft.Container(lieu_deces_field, col={"xs": 12, "sm": 6}),
-                ft.Container(nationalite_field, col={"xs": 12, "sm": 6}),
-                ft.Container(acte_deces_field, col={"xs": 12, "sm": 6}),
+                ft.Container(nom_field, col=6),
+                ft.Container(prenom_field, col=6),
+                ft.Container(date_naissance_field, col=6),
+                ft.Container(date_deces_field, col=6),
+                ft.Container(lieu_deces_field, col=6),
+                ft.Container(nationalite_field, col=6),
+                ft.Container(acte_deces_field, col=6),
             ], spacing=10, run_spacing=10),
-            ft.Divider(color=t["bordure"]),
-            ft.Text("Détails de la réservation", size=15, weight=ft.FontWeight.W_600, color=t["texte"]),
+            ft.Divider(),
+            ft.Text("Détails de la réservation", size=15, weight=ft.FontWeight.W_600),
             date_inhumation_field,
             notes_field,
             ft.Container(
@@ -142,15 +137,14 @@ def ReservationFormView(page: ft.Page, client, caveau: dict, on_submitted, on_ca
                     "ℹ️ Après soumission, le caveau passera en statut « Réservé / En attente » "
                     "(orange) jusqu'à validation par l'administration. Une facture vous sera "
                     "envoyée par email après validation.",
-                    size=12, color=t["texte_att"],
+                    size=12, color="#6b7280",
                 ),
                 padding=10,
-                bgcolor=t["surface_alt"],
+                bgcolor="#fff7ed",
                 border_radius=8,
             ),
-            ft.Row([submit_btn, cancel_btn, loading], spacing=12, wrap=True),
-        ], spacing=14, scroll=ft.ScrollMode.AUTO, expand=True,
-           horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-        padding=12 if mobile else 20,
+            ft.Row([submit_btn, cancel_btn, loading], spacing=12),
+        ], spacing=14, scroll=ft.ScrollMode.AUTO, expand=True),
+        padding=20,
         expand=True,
     )

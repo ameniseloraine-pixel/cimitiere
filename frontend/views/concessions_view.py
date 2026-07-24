@@ -13,8 +13,7 @@ from components.widgets import (
     bouton_principal, champ_texte,
     COULEURS_STATUT_CONCESSION, COULEURS_STATUT_EXHUMATION,
 )
-from config import COULEUR_PRIMAIRE, couleurs
-from responsive import est_mobile as _est_mobile, largeur_contenu
+from config import COULEUR_PRIMAIRE
 
 
 TYPES_CONCESSION = [
@@ -27,25 +26,24 @@ TYPES_CONCESSION = [
 
 
 def ConcessionsView(page: ft.Page, client):
-    tabs_content = ft.Container()
-    mobile = _est_mobile(page)
-    largeur_dialogue = largeur_contenu(page, 380)
+    tabs_content = ft.Container(expand=True)
 
     # ─── Création d'une concession (NOUVEAU) ──────────────────────────────────
 
     def ouvrir_dialogue_creation_concession():
         reservation_id_field = champ_texte(
-            "ID de la réservation validée *",
+            "ID de la réservation validée *", width=350,
             keyboard_type=ft.KeyboardType.NUMBER,
             hint_text="Voir dans l'onglet Réservations",
         )
         type_dd = ft.Dropdown(
             label="Type de concession *",
+            width=350,
             options=[ft.dropdown.Option(k, v) for k, v in TYPES_CONCESSION],
             value="TEMP_10",
         )
         date_debut_field = champ_texte(
-            "Date de début (AAAA-MM-JJ) *",
+            "Date de début (AAAA-MM-JJ) *", width=350,
             hint_text="Ex: 2026-07-09",
         )
 
@@ -82,8 +80,8 @@ def ConcessionsView(page: ft.Page, client):
                     reservation_id_field,
                     type_dd,
                     date_debut_field,
-                ], spacing=10, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-                width=largeur_dialogue,
+                ], spacing=10, tight=True),
+                width=350,
             ),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
@@ -95,8 +93,8 @@ def ConcessionsView(page: ft.Page, client):
     # ─── Onglet Concessions ───────────────────────────────────────────────────
 
     def ouvrir_dialogue_exhumation(concession: dict):
-        motif_field = champ_texte("Motif de l'exhumation *", multiline=True, min_lines=2)
-        destination_field = champ_texte("Destination des restes mortels (optionnel)", multiline=True, min_lines=2)
+        motif_field = champ_texte("Motif de l'exhumation *", width=350, multiline=True, min_lines=2)
+        destination_field = champ_texte("Destination des restes mortels (optionnel)", width=350, multiline=True, min_lines=2)
 
         def soumettre(e):
             if not motif_field.value:
@@ -112,11 +110,7 @@ def ConcessionsView(page: ft.Page, client):
 
         dlg = ft.AlertDialog(
             title=ft.Text(f"Demande d'exhumation — {concession['numero_contrat']}"),
-            content=ft.Container(
-                content=ft.Column([motif_field, destination_field], tight=True, spacing=10,
-                                   horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-                width=largeur_dialogue,
-            ),
+            content=ft.Column([motif_field, destination_field], tight=True, spacing=10),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
                 ft.ElevatedButton("Soumettre", on_click=soumettre, bgcolor=COULEUR_PRIMAIRE, color="white"),
@@ -197,7 +191,7 @@ def ConcessionsView(page: ft.Page, client):
             bgcolor=ft.colors.SURFACE, padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
         )
 
-    concessions_content = ft.Container(content=chargement("Chargement..."))
+    concessions_content = ft.Container(content=chargement("Chargement..."), expand=True)
     filtre_alerte = ft.Checkbox(label="Alertes uniquement (< 90 jours)", on_change=lambda e: charger_concessions())
 
     def charger_concessions():
@@ -210,7 +204,7 @@ def ConcessionsView(page: ft.Page, client):
             else:
                 concessions_content.content = ft.Column(
                     [construire_carte_concession(c) for c in concessions],
-                    spacing=10,
+                    spacing=10, scroll=ft.ScrollMode.AUTO, expand=True,
                 )
         except APIError as err:
             concessions_content.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)
@@ -240,7 +234,7 @@ def ConcessionsView(page: ft.Page, client):
         page.open(dlg)
 
     def refuser_exhumation(exhumation: dict):
-        motif_field = champ_texte("Motif du refus", multiline=True, min_lines=2)
+        motif_field = champ_texte("Motif du refus", width=320, multiline=True, min_lines=2)
 
         def confirmer(e):
             try:
@@ -253,7 +247,7 @@ def ConcessionsView(page: ft.Page, client):
 
         dlg = ft.AlertDialog(
             title=ft.Text(f"Refuser la demande {exhumation['numero_demande']}"),
-            content=ft.Container(content=motif_field, width=largeur_dialogue),
+            content=motif_field,
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
                 ft.ElevatedButton("Refuser", on_click=confirmer, bgcolor="#ef4444", color="white"),
@@ -298,7 +292,7 @@ def ConcessionsView(page: ft.Page, client):
             bgcolor=ft.colors.SURFACE, padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
         )
 
-    exhumations_content = ft.Container(content=chargement("Chargement..."))
+    exhumations_content = ft.Container(content=chargement("Chargement..."), expand=True)
 
     def charger_exhumations():
         exhumations_content.content = chargement("Chargement des exhumations...")
@@ -310,7 +304,7 @@ def ConcessionsView(page: ft.Page, client):
             else:
                 exhumations_content.content = ft.Column(
                     [construire_carte_exhumation(ex) for ex in exhumations],
-                    spacing=10,
+                    spacing=10, scroll=ft.ScrollMode.AUTO, expand=True,
                 )
         except APIError as err:
             exhumations_content.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)
@@ -321,7 +315,7 @@ def ConcessionsView(page: ft.Page, client):
     def on_tab_change(e):
         if e.control.selected_index == 0:
             charger_concessions()
-            tabs_content.content = ft.Column([filtre_alerte, concessions_content], spacing=10)
+            tabs_content.content = ft.Column([filtre_alerte, concessions_content], spacing=10, expand=True)
         else:
             charger_exhumations()
             tabs_content.content = exhumations_content
@@ -337,11 +331,11 @@ def ConcessionsView(page: ft.Page, client):
     )
 
     charger_concessions()
-    tabs_content.content = ft.Column([filtre_alerte, concessions_content], spacing=10)
+    tabs_content.content = ft.Column([filtre_alerte, concessions_content], spacing=10, expand=True)
 
     # NOUVEAU : bouton "Créer une concession", visible pour Admin/Secrétariat uniquement
     bouton_creer = ft.ElevatedButton(
-        "Créer" if mobile else "Créer une concession", icon=ft.icons.ADD,
+        "Créer une concession", icon=ft.icons.ADD,
         bgcolor=COULEUR_PRIMAIRE, color="white",
         on_click=lambda e: ouvrir_dialogue_creation_concession(),
         visible=client.can_see_finance,
@@ -350,16 +344,16 @@ def ConcessionsView(page: ft.Page, client):
     return ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text("Concessions & Exhumations", size=17 if mobile else 20, weight=ft.FontWeight.BOLD),
+                ft.Text("Concessions & Exhumations", size=20, weight=ft.FontWeight.BOLD),
                 ft.Container(expand=True),
                 bouton_creer,
                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: on_tab_change(
                     type("E", (), {"control": tabs})()
                 ), tooltip="Actualiser"),
-            ], wrap=True, spacing=8, run_spacing=8),
+            ]),
             tabs,
             ft.Divider(),
             tabs_content,
-        ], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO),
-        padding=12 if mobile else 20, expand=True,
+        ], spacing=10, expand=True),
+        padding=20, expand=True,
     )

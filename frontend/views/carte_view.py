@@ -16,7 +16,6 @@ from collections import defaultdict
 from api_client import APIError
 from components.widgets import badge_statut, afficher_snackbar, chargement, etat_vide, bouton_principal
 from config import COULEURS_STATUT, LIBELLES_STATUT, COULEUR_PRIMAIRE
-from responsive import est_mobile as _est_mobile, largeur_contenu
 
 
 def CarteView(page: ft.Page, client, on_reserver_caveau):
@@ -25,12 +24,11 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
     clique sur "Réserver" pour un caveau disponible.
     """
 
-    mobile = _est_mobile(page)
-    content_area = ft.Container(content=chargement("Chargement de la carte..."))
-    filtre_zone = ft.Dropdown(label="Zone", width=150 if mobile else 180, options=[], on_change=lambda e: charger_carte())
+    content_area = ft.Container(content=chargement("Chargement de la carte..."), expand=True)
+    filtre_zone = ft.Dropdown(label="Zone", width=180, options=[], on_change=lambda e: charger_carte())
     filtre_statut = ft.Dropdown(
         label="Statut",
-        width=150 if mobile else 200,
+        width=200,
         options=[ft.dropdown.Option("", "Tous les statuts")] + [
             ft.dropdown.Option(k, v) for k, v in LIBELLES_STATUT.items()
         ],
@@ -67,8 +65,9 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                 label="Nouveau statut",
                 value=statut,
                 options=[ft.dropdown.Option(k, v) for k, v in LIBELLES_STATUT.items()],
+                width=250,
             )
-            raison_field = ft.TextField(label="Raison du changement", multiline=True, min_lines=2)
+            raison_field = ft.TextField(label="Raison du changement", width=250, multiline=True, min_lines=2)
 
             def changer_statut(e):
                 try:
@@ -85,7 +84,7 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                 nouveau_statut_dd,
                 raison_field,
                 bouton_principal("Enregistrer", on_click=changer_statut, icone=ft.icons.SAVE),
-            ], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH))
+            ], spacing=10))
 
         dlg = ft.AlertDialog(
             title=ft.Row([
@@ -99,8 +98,8 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                     ft.Row([ft.Text("Bloc :", weight=ft.FontWeight.W_600), ft.Text(caveau["bloc_code"])]),
                     ft.Row([ft.Text("Statut :", weight=ft.FontWeight.W_600), badge_statut(statut)]),
                     *actions,
-                ], spacing=10, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-                width=largeur_contenu(page, 340),
+                ], spacing=10, tight=True),
+                width=320,
             ),
             actions=[ft.TextButton("Fermer", on_click=lambda e: page.close(dlg))],
         )
@@ -153,7 +152,7 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                 ft.Row(bloc_sections, wrap=True, spacing=12, run_spacing=12),
             ], spacing=10))
 
-        return ft.Column(sections, spacing=24)
+        return ft.Column(sections, spacing=24, scroll=ft.ScrollMode.AUTO, expand=True)
 
     def _generer_html_carte(caveaux_geo: list) -> str:
         lat_centre = caveaux_geo[0]["latitude"]
@@ -199,7 +198,7 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
 
         return ft.Container(
             content=ft.WebView(url=data_url, expand=True),
-            height=520,
+            expand=True,
             border_radius=8,
             border=ft.border.all(1, "#e5e7eb"),
         )
@@ -271,22 +270,21 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
 
     return ft.Container(
         content=ft.Column([
-            ft.Text(
-                "Carte du cimetière" if mobile else "Carte interactive du cimetière",
-                size=17 if mobile else 20, weight=ft.FontWeight.BOLD,
-            ),
-            ft.Row(
-                [btn_bascule, filtre_zone, filtre_statut,
-                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger_carte(), tooltip="Actualiser")],
-                wrap=True, spacing=8, run_spacing=8,
-            ),
+            ft.Row([
+                ft.Text("Carte interactive du cimetière", size=20, weight=ft.FontWeight.BOLD),
+                ft.Container(expand=True),
+                btn_bascule,
+                filtre_zone,
+                filtre_statut,
+                ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger_carte(), tooltip="Actualiser"),
+            ], alignment=ft.MainAxisAlignment.START),
             ft.Container(
                 content=legende,
                 padding=ft.padding.symmetric(vertical=8),
             ),
             ft.Divider(),
             content_area,
-        ], spacing=10, expand=True, scroll=ft.ScrollMode.AUTO),
-        padding=12 if mobile else 20,
+        ], spacing=10, expand=True),
+        padding=20,
         expand=True,
     )

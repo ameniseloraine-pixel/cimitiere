@@ -1,27 +1,22 @@
 """
-Vue Inscription — Création de compte client. Même habillage premium
-responsive que la vue Login (carte élevée, largeur plafonnée, jamais de
-débordement mobile).
+Vue Inscription — Création de compte client
 """
 
 import flet as ft
 from api_client import APIError
 from components.widgets import champ_texte, bouton_principal, afficher_snackbar
-from config import couleurs
-from responsive import largeur_contenu
+from config import COULEUR_PRIMAIRE, COULEUR_SECONDAIRE
 
 
 def RegisterView(page: ft.Page, client, on_register_success, on_go_login):
-    t = couleurs(page)
+    nom_field = champ_texte("Nom", width=320, autofocus=True)
+    prenom_field = champ_texte("Prénom", width=320)
+    email_field = champ_texte("Adresse email", width=320)
+    telephone_field = champ_texte("Téléphone (optionnel)", width=320)
+    password_field = champ_texte("Mot de passe", password=True, can_reveal_password=True, width=320)
+    password2_field = champ_texte("Confirmer le mot de passe", password=True, can_reveal_password=True, width=320)
 
-    nom_field = champ_texte("Nom", autofocus=True)
-    prenom_field = champ_texte("Prénom")
-    email_field = champ_texte("Adresse email")
-    telephone_field = champ_texte("Téléphone (optionnel)")
-    password_field = champ_texte("Mot de passe", password=True, can_reveal_password=True)
-    password2_field = champ_texte("Confirmer le mot de passe", password=True, can_reveal_password=True)
-
-    loading = ft.ProgressRing(visible=False, width=20, height=20, stroke_width=2, color=t["accent"])
+    loading = ft.ProgressRing(visible=False, width=20, height=20, stroke_width=2)
 
     def faire_register(e):
         if not all([nom_field.value, prenom_field.value, email_field.value, password_field.value]):
@@ -55,17 +50,14 @@ def RegisterView(page: ft.Page, client, on_register_success, on_go_login):
             register_btn.disabled = False
             page.update()
 
-    register_btn = bouton_principal("Créer mon compte", on_click=faire_register, icone=ft.icons.PERSON_ADD)
+    register_btn = bouton_principal("Créer mon compte", on_click=faire_register, icone=ft.icons.PERSON_ADD, width=320)
 
-    carte_formulaire = ft.Container(
+    return ft.Container(
         content=ft.Column(
             [
-                ft.Icon(ft.icons.PERSON_ADD_ALT_1, size=40, color=t["accent"]),
-                ft.Text(
-                    "Créer un compte", size=20, weight=ft.FontWeight.BOLD, color=t["texte"],
-                    font_family="Playfair Display, Georgia, serif", text_align=ft.TextAlign.CENTER,
-                ),
-                ft.Text("Pour réserver et suivre vos dossiers", size=13, color=t["texte_att"], text_align=ft.TextAlign.CENTER),
+                ft.Icon(ft.icons.PERSON_ADD_ALT_1, size=48, color=COULEUR_PRIMAIRE),
+                ft.Text("Créer un compte", size=22, weight=ft.FontWeight.BOLD, color=COULEUR_SECONDAIRE),
+                ft.Text("Pour réserver et suivre vos dossiers", size=13, color="#6b7280"),
                 ft.Container(height=8),
                 nom_field,
                 prenom_field,
@@ -76,26 +68,15 @@ def RegisterView(page: ft.Page, client, on_register_success, on_go_login):
                 register_btn,
                 loading,
                 ft.Row([
-                    ft.Text("Déjà un compte ?", color=t["texte_att"], size=13),
+                    ft.Text("Déjà un compte ?", color="#6b7280", size=13),
                     ft.TextButton("Se connecter", on_click=lambda e: on_go_login()),
-                ], alignment=ft.MainAxisAlignment.CENTER, wrap=True),
+                ], alignment=ft.MainAxisAlignment.CENTER),
             ],
             spacing=12,
-            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             scroll=ft.ScrollMode.AUTO,
         ),
-        width=largeur_contenu(page, 400),
-        bgcolor=t["surface"],
-        padding=ft.padding.symmetric(horizontal=32, vertical=32),
-        border_radius=20,
-        border=ft.border.all(1, t["bordure"]),
-        shadow=ft.BoxShadow(spread_radius=0, blur_radius=30, color=t["ombre"], offset=ft.Offset(0, 12)),
-    )
-
-    return ft.Container(
-        content=carte_formulaire,
         alignment=ft.alignment.center,
         expand=True,
-        padding=20,
-        bgcolor=t["fond"],
+        padding=30,
     )
