@@ -31,10 +31,17 @@ def ConcessionsView(page: ft.Page, client):
     # ─── Création d'une concession (NOUVEAU) ──────────────────────────────────
 
     def ouvrir_dialogue_creation_concession():
-        reservation_id_field = champ_texte(
-            "ID de la réservation validée *", width=350,
-            keyboard_type=ft.KeyboardType.NUMBER,
-            hint_text="Voir dans l'onglet Réservations",
+        # CORRECTIF UX/traçabilité (faille précédente) : ce formulaire
+        # demandait de taper à la main l'ID numérique brut de la réservation
+        # (ex: 4), alors que l'onglet Réservations n'affiche que le numéro de
+        # dossier (ex: "RES-2026-0004") — cet ID n'était visible NULLE PART
+        # dans l'interface. Corrigé ici avec un menu déroulant qui va chercher
+        # les réservations déjà validées et laisse choisir directement dessus ;
+        # plus besoin de connaître ou taper un ID.
+        reservation_dd = ft.Dropdown(
+            label="Réservation validée *", width=350,
+            hint_text="Chargement...",
+            options=[],
         )
         type_dd = ft.Dropdown(
             label="Type de concession *",
@@ -47,18 +54,32 @@ def ConcessionsView(page: ft.Page, client):
             hint_text="Ex: 2026-07-09",
         )
 
+        def charger_reservations_validees():
+            try:
+                reservations = client.liste_reservations(statut="VALIDEE")
+            except APIError as err:
+                afficher_snackbar(page, err.detail, succes=False)
+                reservations = []
+            if not reservations:
+                reservation_dd.hint_text = "Aucune réservation validée disponible"
+                reservation_dd.options = []
+            else:
+                reservation_dd.options = [
+                    ft.dropdown.Option(
+                        str(r["id"]),
+                        f"{r['numero_dossier']} — {r['defunt_nom_complet']} ({r['client_nom']})",
+                    )
+                    for r in reservations
+                ]
+            dlg.update()
+
         def creer(e):
-            if not reservation_id_field.value or not date_debut_field.value:
+            if not reservation_dd.value or not date_debut_field.value:
                 afficher_snackbar(page, "Merci de remplir tous les champs obligatoires.", succes=False)
                 return
             try:
-                reservation_id = int(reservation_id_field.value)
-            except ValueError:
-                afficher_snackbar(page, "L'ID de réservation doit être un nombre.", succes=False)
-                return
-            try:
                 client.creer_concession(
-                    reservation_id=reservation_id,
+                    reservation_id=int(reservation_dd.value),
                     type_concession=type_dd.value,
                     date_debut=date_debut_field.value,
                 )
@@ -73,11 +94,11 @@ def ConcessionsView(page: ft.Page, client):
             content=ft.Container(
                 content=ft.Column([
                     ft.Text(
-                        "La réservation doit déjà être validée. Trouvez son ID "
-                        "dans l'onglet Réservations.",
+                        "Sélectionnez la réservation déjà validée pour laquelle "
+                        "établir la concession.",
                         size=12, color="#6b7280",
                     ),
-                    reservation_id_field,
+                    reservation_dd,
                     type_dd,
                     date_debut_field,
                 ], spacing=10, tight=True),
@@ -89,6 +110,7 @@ def ConcessionsView(page: ft.Page, client):
             ],
         )
         page.open(dlg)
+        charger_reservations_validees()
 
     # ─── Onglet Concessions ───────────────────────────────────────────────────
 
