@@ -229,10 +229,9 @@ class APIClient:
                 "nom": nom, "code": code,
                 "nombre_rangees": nombre_rangees, "nombre_colonnes": nombre_colonnes,
             },
-        )
-
-    def generer_caveaux_bloc(self, bloc_id: int, latitude_origine: float = -4.7761,
-                              longitude_origine: float = 11.8636, espacement_m: float = 0.5) -> dict:
+        )   
+    def generer_caveaux_bloc(self, bloc_id: int, latitude_origine: float = -4.845,
+                              longitude_origine: float = 11.899, espacement_m: float = 0.5) -> dict:
         return self._request(
             "POST", f"/terrain/blocs/{bloc_id}/generer-caveaux",
             params={
