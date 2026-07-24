@@ -3,14 +3,11 @@ Vue Cartographie — Carte interactive des caveaux
 Représentation en grille colorée par statut (Vert/Orange/Rouge/Gris)
 Cliquer sur un caveau ouvre le détail + actions (réserver / changer statut)
 
-Vue GPS : la carte est désormais servie par une vraie URL backend
-(/carte/carte-html) au lieu d'une URL "data:" — les navigateurs bloquent
-le chargement de "data:" dans une WebView, ce qui causait un rectangle
-gris vide. Sur mobile/web : affichage inline dans un WebView. Sur desktop
-(WebView non supporté par Flet sous Windows/Linux) : ouverture dans le
-navigateur via page.launch_url (fonctionne à la fois en web et desktop,
-contrairement à webbrowser.open qui s'exécutait côté serveur et ne
-faisait donc rien pour l'utilisateur une fois déployé).
+Vue GPS : ouvre systématiquement un nouvel onglet du navigateur avec la
+carte Leaflet, servie par une vraie URL backend (/carte/carte-html).
+On a abandonné la WebView intégrée (trop de couches bloquantes : Flet +
+navigateur + CORS + X-Frame-Options), au profit de page.launch_url qui
+fonctionne de façon fiable sur toutes les plateformes.
 """
 
 import urllib.parse
@@ -40,11 +37,6 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
         ],
         on_change=lambda e: charger_carte(),
     )
-
-    mode_affichage = {"valeur": "grille"}  # "grille" ou "gps"
-
-    def _webview_supporte() -> bool:
-        return page.web or page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS)
 
     legende = ft.Row([
         ft.Row([
@@ -169,15 +161,6 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
             params["zone_code"] = filtre_zone.value
         return f"{API_BASE_URL}/carte/carte-html?{urllib.parse.urlencode(params)}"
 
-    def construire_carte_gps_inline() -> ft.Control:
-        url = _construire_url_carte_gps()
-        return ft.Container(
-            content=ft.WebView(url=url, expand=True),
-            expand=True,
-            border_radius=8,
-            border=ft.border.all(1, "#e5e7eb"),
-        )
-
     def charger_carte():
         content_area.content = chargement("Chargement de la carte...")
         page.update()
@@ -194,31 +177,17 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                     ft.dropdown.Option(z, f"Zone {z}") for z in zones_uniques
                 ]
 
-            if mode_affichage["valeur"] == "gps" and _webview_supporte():
-                content_area.content = construire_carte_gps_inline()
-            else:
-                content_area.content = construire_grille(caveaux)
+            content_area.content = construire_grille(caveaux)
         except APIError as err:
             content_area.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)
 
         page.update()
 
-    # ─── Clic sur le bouton "Vue GPS" ──────────────────────────────────────────
+    # ─── Clic sur le bouton "Vue GPS" : ouvre systématiquement un nouvel onglet ─
 
     def basculer_vue(e):
-        if _webview_supporte():
-            # Mobile/Web : bascule inline entre grille et carte GPS
-            mode_affichage["valeur"] = "gps" if mode_affichage["valeur"] == "grille" else "grille"
-            btn_bascule.text = "Vue Blocs" if mode_affichage["valeur"] == "gps" else "Vue GPS"
-            btn_bascule.icon = ft.icons.GRID_VIEW if mode_affichage["valeur"] == "gps" else ft.icons.MAP
-            charger_carte()
-        else:
-            # Desktop : WebView non supporté par Flet (Windows/Linux) →
-            # ouvre la carte dans le vrai navigateur du client via page.launch_url
-            # (contrairement à webbrowser.open, qui s'exécutait côté serveur
-            # Render et n'ouvrait donc rien chez l'utilisateur).
-            url = _construire_url_carte_gps()
-            page.launch_url(url)
+        url = _construire_url_carte_gps()
+        page.launch_url(url)
 
     btn_bascule = ft.OutlinedButton(
         text="Vue GPS",
