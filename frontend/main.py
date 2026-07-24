@@ -280,13 +280,13 @@ def main(page: ft.Page):
         )
 
         if est_mobile:
-            # Mobile : pas de rail latéral, contenu en pleine largeur,
-            # barre de navigation collée en bas de l'écran.
+            # Mobile : pas de rail latéral, contenu en pleine largeur.
+            # La navigation se fait via le menu burger (tiroir), donc pas
+            # besoin de dupliquer les mêmes liens dans une barre du bas.
             app_shell.content = ft.Column(
                 [
                     header,
                     ft.Container(content=body, expand=True),
-                    nav_bar,
                 ],
                 spacing=0,
                 expand=True,
