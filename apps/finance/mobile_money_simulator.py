@@ -14,6 +14,7 @@ Flux simulé :
                                et met à jour la facture
 """
 
+import logging
 import random
 import string
 from datetime import timedelta
@@ -24,6 +25,8 @@ from .models import (
     TransactionMobileMoney, StatutTransactionMobile,
     Paiement, CanalPaiement,
 )
+
+logger = logging.getLogger(__name__)
 
 DUREE_VALIDITE_MINUTES = 5
 TAUX_ECHEC_SIMULE_PCT = 0  
@@ -68,38 +71,65 @@ def _envoyer_notification_push_simulee(transaction: TransactionMobileMoney):
     """
     Simule la notification push USSD que l'opérateur enverrait normalement
     au téléphone du client. Envoyée par email pour ce projet de test.
+
+    CORRECTIF (faille précédente) : cette fonction utilisait
+    `django.core.mail.send_mail`, qui passe par le backend SMTP par
+    défaut de Django (localhost:25). Aucun serveur SMTP n'existe sur
+    Render, et l'appel était protégé par `fail_silently=True` : le
+    code de confirmation n'était donc JAMAIS envoyé, sans la moindre
+    erreur visible nulle part.
+
+    Corrigé ici en appelant directement l'API HTTPS de Brevo — exactement
+    comme le fait déjà `apps/users/services.py::_envoyer_email_mfa` pour
+    le code MFA de connexion, et `apps/notifications/tasks.py` pour les
+    factures. Toute erreur d'envoi est maintenant journalisée au lieu
+    d'être avalée en silence.
     """
-    from django.core.mail import send_mail
+    import requests
 
     operateur = "MTN Mobile Money" if transaction.canal == CanalPaiement.MOBILE_MONEY else "Airtel Money"
 
     sujet = f"[{operateur}] Confirmation de paiement requise"
-    corps = f"""
-Vous avez initié un paiement {operateur}.
-
-Montant : {transaction.montant:,.0f} FCFA
-Numéro : {transaction.telephone}
-Référence : {transaction.reference}
-
-Code de confirmation : {transaction.code_confirmation}
-
-Ce code expire dans {DUREE_VALIDITE_MINUTES} minutes.
-Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.
-
-(Ceci est une simulation à des fins de démonstration — aucune somme
-réelle n'est débitée.)
-    """.strip()
+    corps_html = f"""
+    <p>Vous avez initié un paiement {operateur}.</p>
+    <p>
+        Montant : <strong>{transaction.montant:,.0f} FCFA</strong><br>
+        Numéro : {transaction.telephone}<br>
+        Référence : {transaction.reference}
+    </p>
+    <p>Code de confirmation : <strong style="font-size:20px">{transaction.code_confirmation}</strong></p>
+    <p>Ce code expire dans {DUREE_VALIDITE_MINUTES} minutes.
+    Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.</p>
+    <p><em>(Ceci est une simulation à des fins de démonstration — aucune somme
+    réelle n'est débitée.)</em></p>
+    """
 
     try:
-        send_mail(
-            subject=sujet,
-            message=corps,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@cimetiere.app"),
-            recipient_list=[transaction.initiateur.email],
-            fail_silently=True,
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "api-key": settings.BREVO_API_KEY,
+                "Content-Type": "application/json",
+                "accept": "application/json",
+            },
+            json={
+                "sender": {"name": "Gestion Cimetière", "email": settings.DEFAULT_FROM_EMAIL},
+                "to": [{"email": transaction.initiateur.email}],
+                "subject": sujet,
+                "htmlContent": corps_html,
+            },
+            timeout=10,
         )
+        if response.status_code >= 400:
+            raise Exception(f"Échec envoi email Brevo: {response.status_code} - {response.text}")
     except Exception:
-        pass  # La simulation continue même si l'email échoue en dev
+        # La transaction reste utilisable (le client peut toujours saisir
+        # le code s'il le connaît / le redemander), mais on journalise
+        # l'échec au lieu de l'avaler silencieusement.
+        logger.exception(
+            "Échec de l'envoi du code de confirmation Mobile Money à %s (transaction %s)",
+            transaction.initiateur.email, transaction.reference,
+        )
 
 
 def confirmer_transaction(transaction: TransactionMobileMoney, code_saisi: str, enregistre_par=None) -> dict:
