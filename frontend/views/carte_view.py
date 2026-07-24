@@ -26,7 +26,7 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
 
     est_mobile = page.width is not None and page.width < 700
 
-    content_area = ft.Container(content=chargement("Chargement de la carte..."), expand=True)
+    content_area = ft.Container(content=chargement("Chargement de la carte..."))
     filtre_zone = ft.Dropdown(label="Zone", width=130 if est_mobile else 180, options=[], on_change=lambda e: charger_carte())
     filtre_statut = ft.Dropdown(
         label="Statut",
@@ -154,7 +154,7 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                 ft.Row(bloc_sections, wrap=True, spacing=12, run_spacing=12),
             ], spacing=10))
 
-        return ft.Column(sections, spacing=24, scroll=ft.ScrollMode.AUTO, expand=True)
+        return ft.Column(sections, spacing=24)
 
     def _generer_html_carte(caveaux_geo: list) -> str:
         lat_centre = caveaux_geo[0]["latitude"]
