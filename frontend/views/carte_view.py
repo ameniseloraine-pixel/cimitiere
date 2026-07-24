@@ -24,11 +24,13 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
     clique sur "Réserver" pour un caveau disponible.
     """
 
+    est_mobile = page.width is not None and page.width < 700
+
     content_area = ft.Container(content=chargement("Chargement de la carte..."), expand=True)
-    filtre_zone = ft.Dropdown(label="Zone", width=180, options=[], on_change=lambda e: charger_carte())
+    filtre_zone = ft.Dropdown(label="Zone", width=130 if est_mobile else 180, options=[], on_change=lambda e: charger_carte())
     filtre_statut = ft.Dropdown(
         label="Statut",
-        width=200,
+        width=140 if est_mobile else 200,
         options=[ft.dropdown.Option("", "Tous les statuts")] + [
             ft.dropdown.Option(k, v) for k, v in LIBELLES_STATUT.items()
         ],
@@ -271,13 +273,17 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
     return ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text("Carte interactive du cimetière", size=20, weight=ft.FontWeight.BOLD),
-                ft.Container(expand=True),
+                ft.Text(
+                    "Carte interactive du cimetière" if not est_mobile else "Carte du cimetière",
+                    size=20 if not est_mobile else 16,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                ft.Container(expand=True) if not est_mobile else ft.Container(width=0),
                 btn_bascule,
                 filtre_zone,
                 filtre_statut,
                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger_carte(), tooltip="Actualiser"),
-            ], alignment=ft.MainAxisAlignment.START),
+            ], alignment=ft.MainAxisAlignment.START, wrap=True, spacing=10, run_spacing=10),
             ft.Container(
                 content=legende,
                 padding=ft.padding.symmetric(vertical=8),
@@ -285,6 +291,6 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
             ft.Divider(),
             content_area,
         ], spacing=10, expand=True),
-        padding=20,
+        padding=12 if est_mobile else 20,
         expand=True,
     )
