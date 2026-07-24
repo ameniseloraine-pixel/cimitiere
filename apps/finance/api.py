@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.http import HttpResponse
 
-from apps.users.api import auth
+from apps.users.api import auth, auth_telechargement
 from apps.users.models import RoleUtilisateur
 from .models import (
     Facture, LigneFacture, Paiement, Tarif,
@@ -208,7 +208,11 @@ def detail_facture(request, facture_id: int):
 
 
 # NOUVEAU : téléchargement du PDF de la facture
-@router.get("/factures/{facture_id}/pdf", auth=auth)
+# CORRECTIF (faille précédente) : auth=auth_telechargement au lieu de auth=auth,
+# car ce lien est ouvert directement dans le navigateur du client
+# (page.launch_url côté frontend) et ne peut donc pas envoyer de header
+# Authorization — le token est passé en paramètre d'URL (?token=...).
+@router.get("/factures/{facture_id}/pdf", auth=auth_telechargement)
 def telecharger_facture_pdf(request, facture_id: int):
     """Génère et retourne le PDF de la facture pour téléchargement."""
     f = get_object_or_404(
