@@ -296,31 +296,38 @@ def TerrainView(page: ft.Page, client):
         libelle_type = dict(TYPE_ZONE_OPTIONS).get(z["type_zone"], z["type_zone"])
 
         return ft.Container(
-            content=ft.Row([
-                ft.Container(
-                    content=ft.Text(z["code"], color="white", size=13, weight=ft.FontWeight.BOLD),
-                    bgcolor=couleur, width=40, height=40,
-                    border_radius=8, alignment=ft.alignment.center,
-                ),
-                ft.Column([
-                    ft.Row([
-                        ft.Text(z["nom"], weight=ft.FontWeight.W_600),
-                        badge_generique(libelle_type, couleur),
-                    ], spacing=8),
-                    ft.Text(
-                        f"{z['superficie_m2']:,.0f} m² — {z['nombre_blocs']} bloc(s)",
-                        size=12, color="#6b7280",
-                    ),
-                ], spacing=4, expand=True),
+            content=ft.Column([
                 ft.Row([
-                    ft.IconButton(ft.icons.TABLE_CHART,
-                                  tooltip="Gérer les blocs",
-                                  on_click=lambda e, zone=z: selectionner_zone(zone)),
+                    ft.Container(
+                        content=ft.Text(z["code"], color="white", size=13, weight=ft.FontWeight.BOLD),
+                        bgcolor=couleur, width=40, height=40,
+                        border_radius=8, alignment=ft.alignment.center,
+                    ),
+                    ft.Column([
+                        ft.Row([
+                            ft.Text(z["nom"], weight=ft.FontWeight.W_600),
+                            badge_generique(libelle_type, couleur),
+                        ], spacing=8, wrap=True),
+                        ft.Text(
+                            f"{z['superficie_m2']:,.0f} m² — {z['nombre_blocs']} bloc(s)",
+                            size=12, color="#6b7280",
+                        ),
+                    ], spacing=4, expand=True),
+                ], spacing=12),
+                # Bouton pleine largeur, toujours visible (ne peut pas être
+                # poussé hors écran comme des icônes alignées à droite).
+                ft.Row([
+                    ft.OutlinedButton(
+                        "Voir les blocs de cette zone",
+                        icon=ft.icons.TABLE_CHART,
+                        on_click=lambda e, zone=z: selectionner_zone(zone),
+                        expand=True,
+                    ),
                     ft.IconButton(ft.icons.DELETE_OUTLINE,
                                   tooltip="Supprimer",
                                   on_click=lambda e, zone=z: supprimer_zone(zone)),
-                ]),
-            ], spacing=12),
+                ], spacing=4),
+            ], spacing=10),
             bgcolor=ft.colors.SURFACE, padding=12, border_radius=10,
             border=ft.border.all(1, "#e5e7eb"),
         )
