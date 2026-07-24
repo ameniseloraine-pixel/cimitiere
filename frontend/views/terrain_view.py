@@ -624,7 +624,7 @@ def TerrainView(page: ft.Page, client):
                 ft.Container(expand=True),
                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger_cimetieres(),
                               tooltip="Actualiser"),
-            ]),
+            ], wrap=True, run_spacing=8),
             ft.Divider(),
             zone_cimetiere,
             zone_zones,

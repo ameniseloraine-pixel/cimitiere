@@ -5,7 +5,7 @@ Vue Login — Authentification en 2 étapes : email/mot de passe puis code MFA
 import flet as ft
 from api_client import APIError
 from components.widgets import champ_texte, bouton_principal, afficher_snackbar
-from config import COULEUR_PRIMAIRE, COULEUR_SECONDAIRE
+from config import COULEUR_PRIMAIRE
 
 
 def LoginView(page: ft.Page, client, on_login_success, on_go_register):
@@ -135,7 +135,7 @@ def LoginView(page: ft.Page, client, on_login_success, on_go_register):
         content=ft.Column(
             [
                 ft.Icon(ft.icons.LOCATION_CITY, size=56, color=COULEUR_PRIMAIRE),
-                ft.Text("Gestion de Cimetière", size=24, weight=ft.FontWeight.BOLD, color=COULEUR_SECONDAIRE),
+                ft.Text("Gestion de Cimetière", size=24, weight=ft.FontWeight.BOLD, color=ft.colors.ON_SURFACE),
                 ft.Text("Connectez-vous à votre espace", size=14, color="#6b7280"),
                 ft.Container(height=10),
                 step1_container,

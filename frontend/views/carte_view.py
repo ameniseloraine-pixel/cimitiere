@@ -135,13 +135,13 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
 
                 bloc_sections.append(ft.Container(
                     content=ft.Column([
-                        ft.Text(f"Bloc {bloc_code}", size=13, weight=ft.FontWeight.W_600, color="#374151"),
+                        ft.Text(f"Bloc {bloc_code}", size=13, weight=ft.FontWeight.W_600, color=ft.colors.ON_SURFACE_VARIANT),
                         ft.Row(tuiles, wrap=True, spacing=4, run_spacing=4),
                     ], spacing=6),
-                    bgcolor="#f8fafc",
+                    bgcolor=ft.colors.SURFACE_VARIANT,
                     padding=12,
                     border_radius=8,
-                    border=ft.border.all(1, "#e5e7eb"),
+                    border=ft.border.all(1, ft.colors.OUTLINE_VARIANT),
                 ))
 
             sections.append(ft.Column([

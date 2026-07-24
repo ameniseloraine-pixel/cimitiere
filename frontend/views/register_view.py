@@ -5,7 +5,7 @@ Vue Inscription — Création de compte client
 import flet as ft
 from api_client import APIError
 from components.widgets import champ_texte, bouton_principal, afficher_snackbar
-from config import COULEUR_PRIMAIRE, COULEUR_SECONDAIRE
+from config import COULEUR_PRIMAIRE
 
 
 def RegisterView(page: ft.Page, client, on_register_success, on_go_login):
@@ -56,7 +56,7 @@ def RegisterView(page: ft.Page, client, on_register_success, on_go_login):
         content=ft.Column(
             [
                 ft.Icon(ft.icons.PERSON_ADD_ALT_1, size=48, color=COULEUR_PRIMAIRE),
-                ft.Text("Créer un compte", size=22, weight=ft.FontWeight.BOLD, color=COULEUR_SECONDAIRE),
+                ft.Text("Créer un compte", size=22, weight=ft.FontWeight.BOLD, color=ft.colors.ON_SURFACE),
                 ft.Text("Pour réserver et suivre vos dossiers", size=13, color="#6b7280"),
                 ft.Container(height=8),
                 nom_field,

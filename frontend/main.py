@@ -2,7 +2,7 @@ import os
 import flet as ft
 
 from api_client import APIClient
-from config import COULEUR_PRIMAIRE, COULEUR_SECONDAIRE, COULEUR_FOND
+from config import COULEUR_PRIMAIRE
 
 from views.login_view import LoginView
 from views.register_view import RegisterView
@@ -29,7 +29,19 @@ def main(page: ft.Page):
     page.favicon = "icone.ico"       # icône de l'onglet navigateur (mode --web)
 
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.bgcolor = COULEUR_FOND
+    # CORRECTIF (couleurs qui "font mal aux yeux" en mode sombre) :
+    # avant, page.bgcolor recevait une valeur hex fixe ("#f8fafc" en clair,
+    # "#161a23" en sombre) choisie à la main, alors que la NavigationRail,
+    # le header et les cartes utilisent tous `ft.colors.SURFACE` —
+    # une couleur générée AUTOMATIQUEMENT par Flet à partir de
+    # `color_scheme_seed` et qui change de teinte selon le thème actif.
+    # Résultat : deux "fonds sombres" légèrement différents et mal
+    # assortis côte à côte (le bgcolor fait main ne correspond pas à la
+    # nuance générée par Flet) → contraste discordant, désagréable à l'œil.
+    # Corrigé en utilisant ft.colors.BACKGROUND partout : c'est le même
+    # système de génération automatique que SURFACE, donc les teintes
+    # restent cohérentes entre elles, en clair comme en sombre.
+    page.bgcolor = ft.colors.BACKGROUND
     page.window.width = 1200
     page.window.height = 800
     page.window.min_width = 360
@@ -46,14 +58,14 @@ def main(page: ft.Page):
     def basculer_theme(e):
         if page.theme_mode == ft.ThemeMode.LIGHT:
             page.theme_mode = ft.ThemeMode.DARK
-            page.bgcolor = "#161a23"
             btn_theme.icon = ft.icons.LIGHT_MODE
             btn_theme.tooltip = "Passer en mode clair"
         else:
             page.theme_mode = ft.ThemeMode.LIGHT
-            page.bgcolor = COULEUR_FOND
             btn_theme.icon = ft.icons.DARK_MODE
             btn_theme.tooltip = "Passer en mode sombre"
+        # page.bgcolor reste ft.colors.BACKGROUND dans les deux cas : Flet
+        # recalcule lui-même la bonne nuance selon page.theme_mode.
         page.update()
 
     btn_theme = ft.IconButton(
@@ -260,7 +272,7 @@ def main(page: ft.Page):
                         "Gestion de Cimetière" if not est_mobile else "Cimetière",
                         size=18 if not est_mobile else 15,
                         weight=ft.FontWeight.BOLD,
-                        color=COULEUR_SECONDAIRE,
+                        color=ft.colors.ON_SURFACE,
                     ),
                 ], spacing=8),
                 ft.Container(expand=True),
@@ -276,7 +288,7 @@ def main(page: ft.Page):
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             bgcolor=ft.colors.SURFACE,
             padding=ft.padding.symmetric(horizontal=20 if not est_mobile else 12, vertical=12),
-            border=ft.border.only(bottom=ft.border.BorderSide(1, "#e5e7eb")),
+            border=ft.border.only(bottom=ft.border.BorderSide(1, ft.colors.OUTLINE_VARIANT)),
         )
 
         if est_mobile:

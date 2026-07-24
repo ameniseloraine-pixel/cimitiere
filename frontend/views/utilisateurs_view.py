@@ -69,10 +69,10 @@ def UtilisateursView(page: ft.Page, client):
             ft.Row([champ_password, champ_role], wrap=True, spacing=10),
             bouton_principal("Créer le compte", on_click=creer, icone=ft.icons.PERSON_ADD),
         ], spacing=10),
-        bgcolor="#f8fafc",
+        bgcolor=ft.colors.SURFACE_VARIANT,
         padding=16,
         border_radius=8,
-        border=ft.border.all(1, "#e5e7eb"),
+        border=ft.border.all(1, ft.colors.OUTLINE_VARIANT),
     )
 
     # ─── Liste des utilisateurs existants ──────────────────────────────────
@@ -101,7 +101,7 @@ def UtilisateursView(page: ft.Page, client):
                 ),
             ], spacing=10))
 
-        return ft.Column([
+        tableau = ft.Column([
             ft.Row([
                 ft.Container(width=180, content=ft.Text("Nom", size=12, weight=ft.FontWeight.W_600, color="#6b7280")),
                 ft.Container(width=220, content=ft.Text("Email", size=12, weight=ft.FontWeight.W_600, color="#6b7280")),
@@ -110,7 +110,13 @@ def UtilisateursView(page: ft.Page, client):
             ], spacing=10),
             ft.Divider(),
             *lignes,
-        ], spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+        ], spacing=10)
+
+        # Défilement horizontal : les colonnes à largeur fixe (180+220+140+...)
+        # dépassent la largeur d'un écran de téléphone. Plutôt que de les
+        # couper (colonnes invisibles hors cadre), tout le tableau devient
+        # défilable horizontalement.
+        return ft.Row([tableau], scroll=ft.ScrollMode.AUTO, expand=True)
 
     def charger_utilisateurs():
         content_area.content = chargement("Chargement...")

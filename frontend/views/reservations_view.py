@@ -182,12 +182,16 @@ def ReservationsView(page: ft.Page, client):
 
     return ft.Container(
         content=ft.Column([
-            ft.Row([
-                ft.Text(titre, size=20, weight=ft.FontWeight.BOLD),
-                ft.Container(expand=True),
-                filtre_statut,
-                ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger(), tooltip="Actualiser"),
-            ]),
+            ft.Row(
+                [
+                    ft.Text(titre, size=20, weight=ft.FontWeight.BOLD),
+                    ft.Container(expand=True),
+                    filtre_statut,
+                    ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger(), tooltip="Actualiser"),
+                ],
+                wrap=True,
+                run_spacing=8,
+            ),
             ft.Divider(),
             content_area,
         ], spacing=10, expand=True),
