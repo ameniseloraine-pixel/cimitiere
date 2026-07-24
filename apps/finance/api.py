@@ -3,6 +3,7 @@ API Finance — Factures, Paiements multi-canal, Tarifs
 Gestion des paiements partiels et historique des transactions
 """
 
+import logging
 from typing import List, Optional
 from decimal import Decimal
 from ninja import Router, Schema
@@ -20,6 +21,7 @@ from .models import (
 from . import mobile_money_simulator
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -499,6 +501,21 @@ def confirmer_paiement_mobile(request, transaction_id: int, data: ConfirmerTrans
             id=transaction.facture_id,
         )
         facture_out = _build_facture_out(facture_fraiche)
+
+        # CORRECTIF (faille précédente) : contrairement au paiement manuel
+        # enregistré par le staff (cf. enregistrer_paiement ci-dessus), le
+        # paiement Mobile Money confirmé en self-service par le client ne
+        # déclenchait AUCUNE notification — le client ne recevait jamais
+        # de confirmation par email quand sa facture était soldée.
+        if facture_fraiche.est_soldee:
+            try:
+                from apps.notifications.tasks import envoyer_confirmation_paiement
+                envoyer_confirmation_paiement.delay(facture_fraiche.id)
+            except Exception:
+                logger.exception(
+                    "Échec de l'envoi de la confirmation de paiement Mobile Money "
+                    "pour la facture %s", facture_fraiche.numero_facture,
+                )
 
     return 200, ConfirmationResultSchema(
         succes=resultat["succes"],
