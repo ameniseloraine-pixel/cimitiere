@@ -2,20 +2,24 @@
 Vue Cartographie — Carte interactive des caveaux
 Représentation en grille colorée par statut (Vert/Orange/Rouge/Gris)
 Cliquer sur un caveau ouvre le détail + actions (réserver / changer statut)
-NOUVEAU : bouton "Vue GPS" — WebView intégré sur mobile/web,
-          ouverture navigateur sur desktop (WebView non supporté sur desktop Flet)
+
+Vue GPS : la carte est désormais servie par une vraie URL backend
+(/carte/carte-html) au lieu d'une URL "data:" — les navigateurs bloquent
+le chargement de "data:" dans une WebView, ce qui causait un rectangle
+gris vide. Sur mobile/web : affichage inline dans un WebView. Sur desktop
+(WebView non supporté par Flet sous Windows/Linux) : ouverture dans le
+navigateur via page.launch_url (fonctionne à la fois en web et desktop,
+contrairement à webbrowser.open qui s'exécutait côté serveur et ne
+faisait donc rien pour l'utilisateur une fois déployé).
 """
 
-import os
-import tempfile
-import webbrowser
 import urllib.parse
 import flet as ft
 from collections import defaultdict
 
 from api_client import APIError
 from components.widgets import badge_statut, afficher_snackbar, chargement, etat_vide, bouton_principal
-from config import COULEURS_STATUT, LIBELLES_STATUT, COULEUR_PRIMAIRE
+from config import COULEURS_STATUT, LIBELLES_STATUT, COULEUR_PRIMAIRE, API_BASE_URL
 
 
 def CarteView(page: ft.Page, client, on_reserver_caveau):
@@ -39,7 +43,6 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
 
     mode_affichage = {"valeur": "grille"}  # "grille" ou "gps"
 
-    # NOUVEAU : détecte si on est sur mobile/web (WebView OK) ou desktop (WebView KO)
     def _webview_supporte() -> bool:
         return page.web or page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS)
 
@@ -156,67 +159,24 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
 
         return ft.Column(sections, spacing=24)
 
-    def _generer_html_carte(caveaux_geo: list) -> str:
-        lat_centre = caveaux_geo[0]["latitude"]
-        lng_centre = caveaux_geo[0]["longitude"]
+    # ─── Construction de l'URL réelle de la carte GPS (backend) ───────────────
 
-        markers_js = ""
-        for c in caveaux_geo:
-            couleur = c["couleur"]
-            popup = f"{c['reference']} — {LIBELLES_STATUT.get(c['statut'], c['statut'])}".replace('"', "'")
-            markers_js += f"""
-            L.circleMarker([{c['latitude']}, {c['longitude']}], {{
-                radius: 9, color: "{couleur}", fillColor: "{couleur}", fillOpacity: 0.9, weight: 2
-            }}).addTo(map).bindPopup("{popup}");
-            """
+    def _construire_url_carte_gps() -> str:
+        params = {"token": client.access_token or ""}
+        if filtre_statut.value:
+            params["statut"] = filtre_statut.value
+        if filtre_zone.value:
+            params["zone_code"] = filtre_zone.value
+        return f"{API_BASE_URL}/carte/carte-html?{urllib.parse.urlencode(params)}"
 
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-          <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-          <style>#map {{ height: 100vh; width: 100%; }} body {{ margin: 0; }}</style>
-        </head>
-        <body>
-          <div id="map"></div>
-          <script>
-            var map = L.map('map').setView([{lat_centre}, {lng_centre}], 17);
-            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png').addTo(map);
-            {markers_js}
-          </script>
-        </body>
-        </html>
-        """
-
-    # NOUVEAU : carte GPS intégrée (mobile / web)
-    def construire_carte_gps_inline(caveaux: list) -> ft.Control:
-        caveaux_geo = [c for c in caveaux if c.get("latitude") is not None and c.get("longitude") is not None]
-        if not caveaux_geo:
-            return etat_vide("Aucun caveau ne possède de coordonnées GPS pour le moment.", ft.icons.MAP_OUTLINED)
-
-        html_content = _generer_html_carte(caveaux_geo)
-        data_url = "data:text/html;charset=utf-8," + urllib.parse.quote(html_content)
-
+    def construire_carte_gps_inline() -> ft.Control:
+        url = _construire_url_carte_gps()
         return ft.Container(
-            content=ft.WebView(url=data_url, expand=True),
+            content=ft.WebView(url=url, expand=True),
             expand=True,
             border_radius=8,
             border=ft.border.all(1, "#e5e7eb"),
         )
-
-    # NOUVEAU : carte GPS ouverte dans le navigateur (desktop uniquement)
-    def ouvrir_carte_gps_navigateur(caveaux: list):
-        caveaux_geo = [c for c in caveaux if c.get("latitude") is not None and c.get("longitude") is not None]
-        if not caveaux_geo:
-            afficher_snackbar(page, "Aucun caveau ne possède de coordonnées GPS pour le moment.", succes=False)
-            return
-
-        html_content = _generer_html_carte(caveaux_geo)
-        chemin_fichier = os.path.join(tempfile.gettempdir(), "carte_cimetiere.html")
-        with open(chemin_fichier, "w", encoding="utf-8") as f:
-            f.write(html_content)
-        webbrowser.open(f"file:///{chemin_fichier}")
 
     def charger_carte():
         content_area.content = chargement("Chargement de la carte...")
@@ -235,7 +195,7 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                 ]
 
             if mode_affichage["valeur"] == "gps" and _webview_supporte():
-                content_area.content = construire_carte_gps_inline(caveaux)
+                content_area.content = construire_carte_gps_inline()
             else:
                 content_area.content = construire_grille(caveaux)
         except APIError as err:
@@ -243,7 +203,8 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
 
         page.update()
 
-    # NOUVEAU : clic sur le bouton "Vue GPS"
+    # ─── Clic sur le bouton "Vue GPS" ──────────────────────────────────────────
+
     def basculer_vue(e):
         if _webview_supporte():
             # Mobile/Web : bascule inline entre grille et carte GPS
@@ -252,15 +213,12 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
             btn_bascule.icon = ft.icons.GRID_VIEW if mode_affichage["valeur"] == "gps" else ft.icons.MAP
             charger_carte()
         else:
-            # Desktop : ouvre la carte dans le navigateur (WebView non supporté)
-            try:
-                caveaux = client.liste_caveaux(
-                    statut=filtre_statut.value or None,
-                    zone_code=filtre_zone.value or None,
-                )
-                ouvrir_carte_gps_navigateur(caveaux)
-            except APIError as err:
-                afficher_snackbar(page, err.detail, succes=False)
+            # Desktop : WebView non supporté par Flet (Windows/Linux) →
+            # ouvre la carte dans le vrai navigateur du client via page.launch_url
+            # (contrairement à webbrowser.open, qui s'exécutait côté serveur
+            # Render et n'ouvrait donc rien chez l'utilisateur).
+            url = _construire_url_carte_gps()
+            page.launch_url(url)
 
     btn_bascule = ft.OutlinedButton(
         text="Vue GPS",
