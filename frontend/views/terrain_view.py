@@ -42,8 +42,8 @@ def TerrainView(page: ft.Page, client):
 
     # ─── Zones de contenu ──────────────────────────────────────────────────────
     zone_cimetiere = ft.Container(expand=True)
-    zone_zones = ft.Container(visible=False)
-    zone_blocs = ft.Container(visible=False)
+    zone_zones = ft.Container(visible=False, expand=True)
+    zone_blocs = ft.Container(visible=False, expand=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SECTION CIMETIÈRE
