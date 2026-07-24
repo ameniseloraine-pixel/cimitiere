@@ -102,6 +102,36 @@ class AuthBearer(HttpBearer):
 auth = AuthBearer()
 
 
+def auth_telechargement(request):
+    """
+    Authentification pour les liens de téléchargement direct (PDF, etc.)
+    ouverts par le navigateur du client (page.launch_url côté frontend).
+
+    Un lien de navigation classique ne peut pas envoyer de header
+    Authorization personnalisé — contrairement aux appels API classiques
+    du frontend (requests avec header Bearer). On accepte donc ici le
+    token JWT en paramètre d'URL (?token=...) en plus du header, pour
+    ces endpoints de téléchargement uniquement. Le token reste
+    à courte durée de vie (SIMPLE_JWT.ACCESS_TOKEN_LIFETIME) et les
+    mêmes vérifications de rôle/propriétaire s'appliquent ensuite dans
+    l'endpoint — cette fonction ne fait qu'identifier l'utilisateur.
+    """
+    token = request.GET.get("token")
+    if not token:
+        header = request.headers.get("Authorization", "")
+        if header.startswith("Bearer "):
+            token = header[7:]
+    if not token:
+        return None
+    payload = verifier_token_jwt(token)
+    if not payload:
+        return None
+    try:
+        return Utilisateur.objects.get(id=payload["user_id"])
+    except Utilisateur.DoesNotExist:
+        return None
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/login", response={200: MFARequiredSchema, 401: ErrorSchema}, auth=None)
