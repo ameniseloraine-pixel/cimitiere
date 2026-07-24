@@ -223,10 +223,23 @@ L'équipe de gestion du cimetière
 
 @shared_task
 def envoyer_confirmation_paiement(facture_id):
-    """Envoie une confirmation de paiement intégral."""
-    from apps.finance.models import Facture
+    """
+    Envoie une confirmation de paiement intégral, avec le reçu PDF en
+    pièce jointe.
 
-    facture = Facture.objects.select_related("client").get(id=facture_id)
+    CORRECTIF (faille précédente) : cette notification n'attachait
+    jusqu'ici aucun document — le client recevait un email de
+    confirmation sans aucune preuve de paiement téléchargeable, alors
+    que le CdC prévoit la génération et l'envoi de documents (factures,
+    certificats). Utilise désormais generer_pdf_recu_paiement, qui
+    liste l'historique des paiements et confirme le solde.
+    """
+    from apps.finance.models import Facture
+    from .pdf_generators import generer_pdf_recu_paiement
+
+    facture = Facture.objects.select_related("client").prefetch_related("paiements").get(id=facture_id)
+
+    pdf_bytes = generer_pdf_recu_paiement(facture)
 
     sujet = f"[Cimetière] Facture {facture.numero_facture} — Paiement reçu"
     corps = f"""
@@ -234,6 +247,8 @@ Bonjour {facture.client.prenom},
 
 Nous confirmons la réception du paiement intégral pour la facture {facture.numero_facture}
 d'un montant total de {facture.montant_total:,.0f} FCFA.
+
+Vous trouverez ci-joint votre reçu de paiement.
 
 Merci pour votre confiance.
 
@@ -244,6 +259,7 @@ L'équipe de gestion du cimetière
     _envoyer_email(
         facture.client, TypeNotification.FACTURE_EMISE,
         sujet, corps,
+        pieces_jointes=[(f"{facture.numero_facture}_recu.pdf", pdf_bytes, "application/pdf")],
         reference_type="facture", reference_id=facture.id,
     )
 
