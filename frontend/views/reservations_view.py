@@ -154,7 +154,7 @@ def ReservationsView(page: ft.Page, client):
 
         return ft.Container(
             content=ft.Column(infos, spacing=6),
-            bgcolor=ft.colors.SURFACE,
+            bgcolor="white",
             padding=14,
             border_radius=10,
             border=ft.border.all(1, "#e5e7eb"),

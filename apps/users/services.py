@@ -3,72 +3,54 @@ Services utilisateurs — MFA, JWT, Emails
 """
 
 import jwt
-import logging
-import requests
-import threading
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.conf import settings
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 
 from .models import Utilisateur, CodeMFA
-
-logger = logging.getLogger(__name__)
 
 
 def generer_et_envoyer_code_mfa(user: Utilisateur) -> CodeMFA:
     """
-    Génère un code MFA à 6 chiffres et l'envoie par email en arrière-plan.
-
-    L'envoi passe par un thread daemon (pas Celery : aucun worker Celery
-    n'est déployé sur Render pour ce projet, donc une tâche Celery ne
-    serait jamais traitée). Le thread est entouré d'un try/except large :
-    quoi qu'il arrive côté Brevo (clé invalide, timeout, panne réseau),
-    la requête de login ne plante jamais et répond normalement.
+    Génère un code MFA à 6 chiffres et l'envoie par email.
+    Invalide les anciens codes non utilisés.
     """
+    # Invalider les anciens codes
     CodeMFA.objects.filter(utilisateur=user, utilise=False).update(utilise=True)
+
+    # Créer le nouveau code (auto-généré dans save())
     code_mfa = CodeMFA.objects.create(utilisateur=user)
 
-    def _envoyer_en_arriere_plan():
-        try:
-            _envoyer_email_mfa(user, code_mfa.code)
-        except Exception:
-            # Ne doit jamais remonter jusqu'à la requête HTTP : on journalise
-            # seulement. Si l'email échoue, l'utilisateur peut cliquer sur
-            # "Renvoyer le code" depuis l'écran MFA.
-            logger.exception("Échec de l'envoi du code MFA à %s", user.email)
+    # Envoyer l'email
+    _envoyer_email_mfa(user, code_mfa.code)
 
-    threading.Thread(target=_envoyer_en_arriere_plan, daemon=True).start()
     return code_mfa
 
 
 def _envoyer_email_mfa(user: Utilisateur, code: str):
-    """Envoi du code MFA par email via l'API Brevo (HTTPS, pas SMTP)."""
+    """Envoi du code MFA par email."""
     sujet = f"[Cimetière] Votre code de connexion : {code}"
-    corps_html = f"""
-    <p>Bonjour {user.prenom},</p>
-    <p>Votre code de vérification est : <strong style="font-size:20px">{code}</strong></p>
-    <p>Ce code est valable 10 minutes et ne peut être utilisé qu'une seule fois.</p>
-    <p>Si vous n'avez pas tenté de vous connecter, ignorez cet email et changez votre mot de passe.</p>
-    <p>Cordialement,<br>L'équipe de gestion du cimetière</p>
-    """
+    corps = f"""
+Bonjour {user.prenom},
 
-    response = requests.post(
-        "https://api.brevo.com/v3/smtp/email",
-        headers={
-            "api-key": settings.BREVO_API_KEY,
-            "Content-Type": "application/json",
-            "accept": "application/json",
-        },
-        json={
-            "sender": {"name": "Gestion Cimetière", "email": settings.DEFAULT_FROM_EMAIL},
-            "to": [{"email": user.email}],
-            "subject": sujet,
-            "htmlContent": corps_html,
-        },
-        timeout=10,
+Votre code de vérification est : {code}
+
+Ce code est valable 10 minutes et ne peut être utilisé qu'une seule fois.
+
+Si vous n'avez pas tenté de vous connecter, ignorez cet email et changez votre mot de passe.
+
+Cordialement,
+L'équipe de gestion du cimetière
+    """.strip()
+
+    send_mail(
+        subject=sujet,
+        message=corps,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
     )
-
-    if response.status_code >= 400:
-        raise Exception(f"Échec envoi email Brevo: {response.status_code} - {response.text}")
 
 
 def creer_tokens_jwt(user: Utilisateur) -> dict:

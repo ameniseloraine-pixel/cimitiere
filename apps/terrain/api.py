@@ -176,6 +176,7 @@ def supprimer_zone(request, zone_id: int):
     if not request.auth.est_admin:
         return 403, {"detail": "Seul un administrateur peut supprimer une zone."}
     zone = get_object_or_404(Zone, id=zone_id)
+    # Vérifier qu'aucun caveau n'est occupé dans cette zone
     from apps.cartographie.models import Caveau, StatutCaveau
     caveaux_occupes = Caveau.objects.filter(
         bloc__zone=zone, statut=StatutCaveau.OCCUPE
@@ -223,12 +224,11 @@ def creer_bloc(request, zone_id: int, data: BlocCreateSchema):
 
 
 @router.post("/blocs/{bloc_id}/generer-caveaux", response={201: MessageSchema, 403: ErrorSchema, 404: ErrorSchema, 400: ErrorSchema}, auth=auth)
-def generer_caveaux_bloc(request, bloc_id: int, latitude_origine: float = -4.7761, longitude_origine: float = 11.8636, espacement_m: float = 0.5):
+def generer_caveaux_bloc(request, bloc_id: int, latitude_origine: float = 0.0, longitude_origine: float = 0.0, espacement_m: float = 0.5):
     """
     Génère automatiquement tous les caveaux d'un bloc
     selon sa configuration rangées × colonnes.
     Positionne les caveaux avec un espacement GPS calculé.
-    Par défaut, centré sur Pointe-Noire si aucune coordonnée n'est précisée.
     """
     if not request.auth.peut_modifier_carte:
         return 403, {"detail": "Permission insuffisante."}
@@ -237,9 +237,11 @@ def generer_caveaux_bloc(request, bloc_id: int, latitude_origine: float = -4.776
     from apps.cartographie.models import Caveau
     from django.contrib.gis.geos import Point
 
+    # Vérifier qu'il n'y a pas déjà des caveaux
     if bloc.caveaux.exists():
         return 400, {"detail": f"Le bloc {bloc.code} contient déjà des caveaux. Supprimez-les d'abord."}
 
+    # Espacement GPS approximatif : 1 degré lat ≈ 111 km
     espacement_lat = espacement_m / 111000
     espacement_lon = espacement_m / 111000
 

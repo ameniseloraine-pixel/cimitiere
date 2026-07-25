@@ -1,7 +1,7 @@
 """
 Vue Concessions & Exhumations
 - Liste des concessions avec alertes d'expiration (< 90 jours)
-- Création (Admin/Secrétariat), renouvellement
+- Renouvellement
 - Demandes d'exhumation : soumission, autorisation/refus (admin)
 """
 
@@ -16,101 +16,8 @@ from components.widgets import (
 from config import COULEUR_PRIMAIRE
 
 
-TYPES_CONCESSION = [
-    ("TEMP_5", "Temporaire 5 ans"),
-    ("TEMP_10", "Temporaire 10 ans"),
-    ("TEMP_15", "Temporaire 15 ans"),
-    ("PERP", "Perpétuelle"),
-    ("FAM", "Familiale"),
-]
-
-
 def ConcessionsView(page: ft.Page, client):
     tabs_content = ft.Container(expand=True)
-
-    # ─── Création d'une concession (NOUVEAU) ──────────────────────────────────
-
-    def ouvrir_dialogue_creation_concession():
-        # CORRECTIF UX/traçabilité (faille précédente) : ce formulaire
-        # demandait de taper à la main l'ID numérique brut de la réservation
-        # (ex: 4), alors que l'onglet Réservations n'affiche que le numéro de
-        # dossier (ex: "RES-2026-0004") — cet ID n'était visible NULLE PART
-        # dans l'interface. Corrigé ici avec un menu déroulant qui va chercher
-        # les réservations déjà validées et laisse choisir directement dessus ;
-        # plus besoin de connaître ou taper un ID.
-        reservation_dd = ft.Dropdown(
-            label="Réservation validée *", width=350,
-            hint_text="Chargement...",
-            options=[],
-        )
-        type_dd = ft.Dropdown(
-            label="Type de concession *",
-            width=350,
-            options=[ft.dropdown.Option(k, v) for k, v in TYPES_CONCESSION],
-            value="TEMP_10",
-        )
-        date_debut_field = champ_texte(
-            "Date de début (AAAA-MM-JJ) *", width=350,
-            hint_text="Ex: 2026-07-09",
-        )
-
-        def charger_reservations_validees():
-            try:
-                reservations = client.liste_reservations(statut="VALIDEE")
-            except APIError as err:
-                afficher_snackbar(page, err.detail, succes=False)
-                reservations = []
-            if not reservations:
-                reservation_dd.hint_text = "Aucune réservation validée disponible"
-                reservation_dd.options = []
-            else:
-                reservation_dd.options = [
-                    ft.dropdown.Option(
-                        str(r["id"]),
-                        f"{r['numero_dossier']} — {r['defunt_nom_complet']} ({r['client_nom']})",
-                    )
-                    for r in reservations
-                ]
-            dlg.update()
-
-        def creer(e):
-            if not reservation_dd.value or not date_debut_field.value:
-                afficher_snackbar(page, "Merci de remplir tous les champs obligatoires.", succes=False)
-                return
-            try:
-                client.creer_concession(
-                    reservation_id=int(reservation_dd.value),
-                    type_concession=type_dd.value,
-                    date_debut=date_debut_field.value,
-                )
-                afficher_snackbar(page, "Concession créée avec succès.", succes=True)
-                page.close(dlg)
-                charger_concessions()
-            except APIError as err:
-                afficher_snackbar(page, err.detail, succes=False)
-
-        dlg = ft.AlertDialog(
-            title=ft.Text("Créer une concession"),
-            content=ft.Container(
-                content=ft.Column([
-                    ft.Text(
-                        "Sélectionnez la réservation déjà validée pour laquelle "
-                        "établir la concession.",
-                        size=12, color="#6b7280",
-                    ),
-                    reservation_dd,
-                    type_dd,
-                    date_debut_field,
-                ], spacing=10, tight=True),
-                width=350,
-            ),
-            actions=[
-                ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
-                ft.ElevatedButton("Créer", on_click=creer, bgcolor=COULEUR_PRIMAIRE, color="white"),
-            ],
-        )
-        page.open(dlg)
-        charger_reservations_validees()
 
     # ─── Onglet Concessions ───────────────────────────────────────────────────
 
@@ -210,7 +117,7 @@ def ConcessionsView(page: ft.Page, client):
 
         return ft.Container(
             content=ft.Column(infos, spacing=6),
-            bgcolor=ft.colors.SURFACE, padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
+            bgcolor="white", padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
         )
 
     concessions_content = ft.Container(content=chargement("Chargement..."), expand=True)
@@ -311,7 +218,7 @@ def ConcessionsView(page: ft.Page, client):
 
         return ft.Container(
             content=ft.Column(infos, spacing=6),
-            bgcolor=ft.colors.SURFACE, padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
+            bgcolor="white", padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
         )
 
     exhumations_content = ft.Container(content=chargement("Chargement..."), expand=True)
@@ -355,20 +262,11 @@ def ConcessionsView(page: ft.Page, client):
     charger_concessions()
     tabs_content.content = ft.Column([filtre_alerte, concessions_content], spacing=10, expand=True)
 
-    # NOUVEAU : bouton "Créer une concession", visible pour Admin/Secrétariat uniquement
-    bouton_creer = ft.ElevatedButton(
-        "Créer une concession", icon=ft.icons.ADD,
-        bgcolor=COULEUR_PRIMAIRE, color="white",
-        on_click=lambda e: ouvrir_dialogue_creation_concession(),
-        visible=client.can_see_finance,
-    )
-
     return ft.Container(
         content=ft.Column([
             ft.Row([
                 ft.Text("Concessions & Exhumations", size=20, weight=ft.FontWeight.BOLD),
                 ft.Container(expand=True),
-                bouton_creer,
                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: on_tab_change(
                     type("E", (), {"control": tabs})()
                 ), tooltip="Actualiser"),
