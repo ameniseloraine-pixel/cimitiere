@@ -13,6 +13,7 @@ from components.widgets import (
     bouton_principal, champ_texte, COULEURS_STATUT_FACTURE,
 )
 from config import COULEUR_PRIMAIRE, API_BASE_URL
+from responsive import est_mobile
 
 
 CANAUX_PAIEMENT = [
@@ -261,23 +262,52 @@ def FinanceView(page: ft.Page, client):
             afficher_snackbar(page, err.detail, succes=False)
             return
 
-        lignes_rows = [
-            ft.Row([
-                ft.Text(l["description"], size=12, expand=True),
-                ft.Text(f"{l['quantite']} x {l['prix_unitaire']:,.0f}", size=12),
-                ft.Text(f"{l['montant_total']:,.0f} FCFA", size=12, weight=ft.FontWeight.W_600),
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-            for l in facture["lignes"]
-        ]
+        # CORRECTIF (petit écran) : sur mobile, on empile description / quantité /
+        # montant verticalement au lieu d'un Row à 3 colonnes qui dépassait la
+        # largeur de l'écran (donc devenait invisible/coupé, sans possibilité
+        # de scroll horizontal dans un AlertDialog).
+        mobile = est_mobile(page)
 
-        paiements_rows = [
-            ft.Row([
-                ft.Text(p["canal_libelle"], size=12, expand=True),
-                ft.Text(p["date_paiement"][:10], size=11, color="#6b7280"),
-                ft.Text(f"{p['montant']:,.0f} FCFA", size=12, weight=ft.FontWeight.W_600, color="#22c55e"),
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-            for p in facture["paiements"]
-        ] or [ft.Text("Aucun paiement enregistré.", size=12, color="#9ca3af")]
+        if mobile:
+            lignes_rows = [
+                ft.Column([
+                    ft.Text(l["description"], size=12, weight=ft.FontWeight.W_500),
+                    ft.Row([
+                        ft.Text(f"{l['quantite']} x {l['prix_unitaire']:,.0f} FCFA", size=11, color="#6b7280"),
+                        ft.Container(expand=True),
+                        ft.Text(f"{l['montant_total']:,.0f} FCFA", size=12, weight=ft.FontWeight.W_600),
+                    ]),
+                ], spacing=2)
+                for l in facture["lignes"]
+            ]
+            paiements_rows = [
+                ft.Column([
+                    ft.Row([
+                        ft.Text(p["canal_libelle"], size=12, weight=ft.FontWeight.W_500, expand=True),
+                        ft.Text(f"{p['montant']:,.0f} FCFA", size=12, weight=ft.FontWeight.W_600, color="#22c55e"),
+                    ]),
+                    ft.Text(p["date_paiement"][:10], size=11, color="#6b7280"),
+                ], spacing=2)
+                for p in facture["paiements"]
+            ] or [ft.Text("Aucun paiement enregistré.", size=12, color="#9ca3af")]
+        else:
+            lignes_rows = [
+                ft.Row([
+                    ft.Text(l["description"], size=12, expand=True),
+                    ft.Text(f"{l['quantite']} x {l['prix_unitaire']:,.0f}", size=12),
+                    ft.Text(f"{l['montant_total']:,.0f} FCFA", size=12, weight=ft.FontWeight.W_600),
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+                for l in facture["lignes"]
+            ]
+
+            paiements_rows = [
+                ft.Row([
+                    ft.Text(p["canal_libelle"], size=12, expand=True),
+                    ft.Text(p["date_paiement"][:10], size=11, color="#6b7280"),
+                    ft.Text(f"{p['montant']:,.0f} FCFA", size=12, weight=ft.FontWeight.W_600, color="#22c55e"),
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+                for p in facture["paiements"]
+            ] or [ft.Text("Aucun paiement enregistré.", size=12, color="#9ca3af")]
 
         actions = []
 
@@ -308,8 +338,21 @@ def FinanceView(page: ft.Page, client):
                 )
             )
 
+        # CORRECTIF (petit écran) : la boîte de dialogue avait une largeur/hauteur
+        # FIXE (380x420), plus large que l'écran de nombreux téléphones (souvent
+        # 360-375px de large en CSS pixels). Résultat : le contenu débordait du
+        # viewport et devenait invisible/coupé sur le côté, sans qu'aucun scroll
+        # horizontal ne soit disponible dans un AlertDialog. On calcule maintenant
+        # une largeur/hauteur adaptées à la taille réelle de l'écran (page.width /
+        # page.height), avec des marges de sécurité, comme le fait déjà le reste
+        # de l'application via responsive.py.
+        largeur_dispo = page.width or 380
+        hauteur_dispo = page.height or 640
+        dlg_width = min(380, largeur_dispo - 32) if mobile else 380
+        dlg_height = min(420, hauteur_dispo - 140) if mobile else 420
+
         dlg = ft.AlertDialog(
-            title=ft.Text(f"Facture {facture['numero_facture']}"),
+            title=ft.Text(f"Facture {facture['numero_facture']}", size=16 if mobile else 18),
             content=ft.Container(
                 content=ft.Column([
                     ft.Text(f"Client : {facture['client_nom']}", size=13),
@@ -329,17 +372,45 @@ def FinanceView(page: ft.Page, client):
                     ft.Text("Historique des paiements", size=13, weight=ft.FontWeight.W_600),
                     *paiements_rows,
                 ], spacing=8, tight=True, scroll=ft.ScrollMode.AUTO),
-                width=380, height=420,
+                width=dlg_width, height=dlg_height,
             ),
-            actions=actions + [ft.TextButton("Fermer", on_click=lambda e: page.close(dlg))],
+            # CORRECTIF (petit écran) : les boutons d'action (jusqu'à 3 :
+            # PDF / Mobile Money / paiement manuel) étaient alignés sur une
+            # seule ligne par défaut et débordaient hors de l'écran sur
+            # mobile. On les empile verticalement dans ce cas, sur toute la
+            # largeur du dialogue.
+            actions=(
+                [ft.Column(
+                    actions + [ft.TextButton("Fermer", on_click=lambda e: page.close(dlg))],
+                    spacing=6, tight=True, width=dlg_width,
+                )]
+                if mobile else
+                actions + [ft.TextButton("Fermer", on_click=lambda e: page.close(dlg))]
+            ),
         )
         page.open(dlg)
 
     def construire_carte_facture(f: dict) -> ft.Container:
         couleur = COULEURS_STATUT_FACTURE.get(f["statut"], "#9ca3af")
+        mobile_carte = est_mobile(page)
 
         # Barre de progression du paiement
         ratio = f["montant_paye"] / f["montant_total"] if f["montant_total"] > 0 else 0
+
+        # CORRECTIF (petit écran) : les 3 montants (Total/Payé/Restant) sur
+        # une seule ligne débordaient sur mobile. On les passe en Wrap pour
+        # qu'ils retombent naturellement à la ligne suivante si besoin.
+        montants = ft.Row([
+            ft.Text(f"Total : {f['montant_total']:,.0f} FCFA", size=13),
+            ft.Text(f"Payé : {f['montant_paye']:,.0f} FCFA", size=13, color="#22c55e"),
+            ft.Text(f"Restant : {f['solde_restant']:,.0f} FCFA", size=13,
+                    color="#ef4444" if f["solde_restant"] > 0 else "#22c55e"),
+        ], spacing=16, wrap=True) if not mobile_carte else ft.Column([
+            ft.Text(f"Total : {f['montant_total']:,.0f} FCFA", size=13),
+            ft.Text(f"Payé : {f['montant_paye']:,.0f} FCFA", size=13, color="#22c55e"),
+            ft.Text(f"Restant : {f['solde_restant']:,.0f} FCFA", size=13,
+                    color="#ef4444" if f["solde_restant"] > 0 else "#22c55e"),
+        ], spacing=2)
 
         return ft.Container(
             content=ft.Column([
@@ -348,12 +419,7 @@ def FinanceView(page: ft.Page, client):
                     badge_generique(f["statut_libelle"], couleur),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ft.Text(f"Client : {f['client_nom']}", size=12, color="#6b7280") if client.can_see_finance else ft.Container(),
-                ft.Row([
-                    ft.Text(f"Total : {f['montant_total']:,.0f} FCFA", size=13),
-                    ft.Text(f"Payé : {f['montant_paye']:,.0f} FCFA", size=13, color="#22c55e"),
-                    ft.Text(f"Restant : {f['solde_restant']:,.0f} FCFA", size=13,
-                            color="#ef4444" if f["solde_restant"] > 0 else "#22c55e"),
-                ], spacing=16),
+                montants,
                 ft.ProgressBar(value=ratio, color="#22c55e", bgcolor="#e5e7eb", height=6, border_radius=4),
                 ft.Row([
                     ft.Text(f"Émise le {f['date_emission'][:10]}"
