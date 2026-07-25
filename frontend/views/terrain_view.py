@@ -200,11 +200,22 @@ def TerrainView(page: ft.Page, client):
 
     def ouvrir_dialogue_zone(zone=None):
         est_modif = zone is not None
+
+        # Surface encore disponible sur le cimetière, calculée à partir des
+        # zones déjà chargées en mémoire (state["zones"]), pour guider
+        # l'utilisateur AVANT qu'il ne se heurte à l'erreur du serveur.
+        cim = state["cimetiere"]
+        superficie_deja_allouee = sum(z["superficie_m2"] for z in state["zones"])
+        superficie_disponible = cim["superficie_totale_m2"] - superficie_deja_allouee
+
         nom_f = champ_texte("Nom de la zone *", width=320, value=zone["nom"] if est_modif else "")
         code_f = champ_texte("Code (ex: A, B, C) *", width=150, value=zone["code"] if est_modif else "")
-        superficie_f = champ_texte("Superficie (m²) *", width=150,
-                                    keyboard_type=ft.KeyboardType.NUMBER,
-                                    value=str(int(zone["superficie_m2"])) if est_modif else "")
+        superficie_f = champ_texte(
+            "Superficie (m²) *", width=150,
+            keyboard_type=ft.KeyboardType.NUMBER,
+            value=str(int(zone["superficie_m2"])) if est_modif else "",
+            helper_text=f"Max {superficie_disponible:,.0f} m² disponibles" if not est_modif else None,
+        )
         type_dd = ft.Dropdown(
             label="Type de zone *", width=320,
             options=[ft.dropdown.Option(k, v) for k, v in TYPE_ZONE_OPTIONS],
@@ -219,17 +230,34 @@ def TerrainView(page: ft.Page, client):
                 afficher_snackbar(page, "Les champs * sont obligatoires.", succes=False)
                 return
             try:
-                payload = {
-                    "nom": nom_f.value.strip(),
-                    "code": code_f.value.strip().upper(),
-                    "type_zone": type_dd.value,
-                    "superficie_m2": float(superficie_f.value),
-                    "description": description_f.value.strip(),
-                    "ordre_affichage": 0,
-                }
+                superficie_saisie = float(superficie_f.value)
             except ValueError:
                 afficher_snackbar(page, "Superficie invalide.", succes=False)
                 return
+
+            # Contrôle côté client (feedback immédiat) — le serveur revalide
+            # de toute façon systématiquement, c'est lui la source de vérité.
+            if not est_modif:
+                if superficie_saisie <= 0:
+                    afficher_snackbar(page, "La superficie doit être positive.", succes=False)
+                    return
+                if superficie_saisie > superficie_disponible:
+                    afficher_snackbar(
+                        page,
+                        f"Superficie trop grande : il ne reste que "
+                        f"{superficie_disponible:,.0f} m² disponibles sur le cimetière.",
+                        succes=False,
+                    )
+                    return
+
+            payload = {
+                "nom": nom_f.value.strip(),
+                "code": code_f.value.strip().upper(),
+                "type_zone": type_dd.value,
+                "superficie_m2": superficie_saisie,
+                "description": description_f.value.strip(),
+                "ordre_affichage": 0,
+            }
             try:
                 if est_modif:
                     # Pas d'endpoint PUT zone dans l'API — on le supprime et recrée
@@ -243,12 +271,23 @@ def TerrainView(page: ft.Page, client):
                 page.close(dlg)
                 charger_zones()
             except APIError as err:
+                # Le serveur renvoie maintenant un message détaillé
+                # (superficie dépassée, zone négative, etc.) — on l'affiche
+                # tel quel plutôt qu'un message générique.
                 afficher_snackbar(page, err.detail, succes=False)
 
         dlg = ft.AlertDialog(
             title=ft.Text("Créer une zone"),
             content=ft.Container(
                 content=ft.Column([
+                    ft.Container(
+                        content=ft.Text(
+                            f"Surface disponible sur le cimetière : {superficie_disponible:,.0f} m² "
+                            f"(sur {cim['superficie_totale_m2']:,.0f} m² au total)",
+                            size=12, color="#166534", weight=ft.FontWeight.W_600,
+                        ),
+                        bgcolor="#f0fdf4", padding=8, border_radius=6,
+                    ) if not est_modif else ft.Container(),
                     ft.Row([code_f, superficie_f], spacing=10),
                     nom_f, type_dd, description_f,
                     ft.Container(
@@ -259,7 +298,7 @@ def TerrainView(page: ft.Page, client):
                         ),
                         bgcolor="#f0f9ff", padding=8, border_radius=6,
                     ),
-                ], spacing=10, tight=True),
+                ], spacing=10, tight=True, scroll=ft.ScrollMode.AUTO),
                 width=350,
             ),
             actions=[
@@ -283,7 +322,7 @@ def TerrainView(page: ft.Page, client):
         dlg = ft.AlertDialog(
             title=ft.Text(f"Supprimer la zone {zone['code']} ?"),
             content=ft.Text(f"Cette action est irréversible.\n"
-                            f"Impossible si des caveaux occupés existent dans cette zone."),
+                            f"Impossible si des réservations (actives ou passées) existent sur des caveaux de cette zone."),
             actions=[
                 ft.TextButton("Annuler", on_click=lambda e: page.close(dlg)),
                 ft.ElevatedButton("Supprimer", on_click=confirmer, bgcolor="#ef4444", color="white"),
@@ -294,6 +333,17 @@ def TerrainView(page: ft.Page, client):
     def construire_carte_zone(z: dict) -> ft.Container:
         couleur = COULEUR_TYPE_ZONE.get(z["type_zone"], "#9ca3af")
         libelle_type = dict(TYPE_ZONE_OPTIONS).get(z["type_zone"], z["type_zone"])
+
+        # Info de capacité — n'a de sens que pour les zones exploitables
+        # (capacite_theorique_max vaut 0 pour les autres types de zone).
+        capacite_info = None
+        if z["type_zone"] == "EXPLOIT":
+            restante = z["capacite_theorique_max"] - z["capacite_deja_allouee"]
+            capacite_info = ft.Text(
+                f"Capacité : {z['capacite_deja_allouee']} / {z['capacite_theorique_max']} caveaux alloués "
+                f"({restante} restant{'s' if restante > 1 else ''})",
+                size=11, color="#166534" if restante > 0 else "#dc2626",
+            )
 
         return ft.Container(
             content=ft.Column([
@@ -312,6 +362,7 @@ def TerrainView(page: ft.Page, client):
                             f"{z['superficie_m2']:,.0f} m² — {z['nombre_blocs']} bloc(s)",
                             size=12, color="#6b7280",
                         ),
+                        *([capacite_info] if capacite_info else []),
                     ], spacing=4, expand=True),
                 ], spacing=12),
                 # Bouton pleine largeur, toujours visible (ne peut pas être
@@ -409,6 +460,9 @@ def TerrainView(page: ft.Page, client):
 
     def ouvrir_dialogue_bloc(bloc=None):
         est_modif = bloc is not None
+        zone = state["zone_selectionnee"]
+        capacite_restante = zone["capacite_theorique_max"] - zone["capacite_deja_allouee"]
+
         nom_f = champ_texte("Nom du bloc *", width=300,
                             value=bloc["nom"] if est_modif else "")
         code_f = champ_texte("Code (ex: B1, B2) *", width=140,
@@ -435,6 +489,18 @@ def TerrainView(page: ft.Page, client):
                 afficher_snackbar(page, "Valeur numérique invalide.", succes=False)
                 return
             capacite = payload["nombre_rangees"] * payload["nombre_colonnes"]
+
+            # Contrôle côté client (feedback immédiat) — le serveur revalide
+            # de toute façon systématiquement, c'est lui la source de vérité.
+            if not est_modif and capacite > capacite_restante:
+                afficher_snackbar(
+                    page,
+                    f"Capacité dépassée : il ne reste que {capacite_restante} place(s) "
+                    f"disponible(s) dans cette zone, ce bloc en demande {capacite}.",
+                    succes=False,
+                )
+                return
+
             try:
                 zone_id = state["zone_selectionnee"]["id"]
                 client._request("POST", f"/terrain/zones/{zone_id}/blocs", json=payload)
@@ -448,6 +514,16 @@ def TerrainView(page: ft.Page, client):
             title=ft.Text("Créer un bloc"),
             content=ft.Container(
                 content=ft.Column([
+                    ft.Container(
+                        content=ft.Text(
+                            f"Places disponibles dans la zone {zone['code']} : {capacite_restante} "
+                            f"(sur {zone['capacite_theorique_max']} au total)",
+                            size=12, color="#166534" if capacite_restante > 0 else "#dc2626",
+                            weight=ft.FontWeight.W_600,
+                        ),
+                        bgcolor="#f0fdf4" if capacite_restante > 0 else "#fef2f2",
+                        padding=8, border_radius=6,
+                    ),
                     ft.Row([code_f], spacing=10),
                     nom_f,
                     ft.Text("Grille de caveaux", size=13, weight=ft.FontWeight.W_600),
@@ -566,6 +642,7 @@ def TerrainView(page: ft.Page, client):
             caveaux_crees = sum(b["nombre_caveaux_reels"] for b in blocs)
             caveaux_theoriques = sum(b["capacite_theorique"] for b in blocs)
 
+            peut_ajouter_bloc = zone["type_zone"] == "EXPLOIT"
             en_tete = ft.Column([
                 ft.Row([
                     ft.IconButton(ft.icons.ARROW_BACK,
@@ -574,8 +651,13 @@ def TerrainView(page: ft.Page, client):
                     ft.Text(f"Blocs — Zone {zone['code']} ({zone['nom']})",
                             size=16, weight=ft.FontWeight.BOLD),
                     ft.Container(expand=True),
-                    ft.ElevatedButton("+ Nouveau bloc", icon=ft.icons.ADD,
-                                      on_click=lambda e: ouvrir_dialogue_bloc()),
+                    ft.ElevatedButton(
+                        "+ Nouveau bloc", icon=ft.icons.ADD,
+                        on_click=lambda e: ouvrir_dialogue_bloc(),
+                        disabled=not peut_ajouter_bloc,
+                        tooltip=None if peut_ajouter_bloc else
+                                "Seules les zones « Exploitable » peuvent accueillir des blocs/caveaux.",
+                    ),
                 ]),
                 ft.Container(
                     content=ft.Row([
