@@ -365,18 +365,14 @@ def ConcessionsView(page: ft.Page, client):
 
     return ft.Container(
         content=ft.Column([
-            ft.Row(
-                [
-                    ft.Text("Concessions & Exhumations", size=20, weight=ft.FontWeight.BOLD),
-                    ft.Container(expand=True),
-                    bouton_creer,
-                    ft.IconButton(ft.icons.REFRESH, on_click=lambda e: on_tab_change(
-                        type("E", (), {"control": tabs})()
-                    ), tooltip="Actualiser"),
-                ],
-                wrap=True,
-                run_spacing=8,
-            ),
+            ft.Row([
+                ft.Text("Concessions & Exhumations", size=20, weight=ft.FontWeight.BOLD),
+                ft.Container(expand=True),
+                bouton_creer,
+                ft.IconButton(ft.icons.REFRESH, on_click=lambda e: on_tab_change(
+                    type("E", (), {"control": tabs})()
+                ), tooltip="Actualiser"),
+            ]),
             tabs,
             ft.Divider(),
             tabs_content,

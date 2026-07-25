@@ -13,7 +13,6 @@ from components.widgets import (
     bouton_principal, champ_texte, COULEURS_STATUT_FACTURE,
 )
 from config import COULEUR_PRIMAIRE, API_BASE_URL
-from responsive import est_mobile as _est_mobile
 
 
 CANAUX_PAIEMENT = [
@@ -354,7 +353,7 @@ def FinanceView(page: ft.Page, client):
                     ft.Text(f"Payé : {f['montant_paye']:,.0f} FCFA", size=13, color="#22c55e"),
                     ft.Text(f"Restant : {f['solde_restant']:,.0f} FCFA", size=13,
                             color="#ef4444" if f["solde_restant"] > 0 else "#22c55e"),
-                ], spacing=16, wrap=True, run_spacing=4),
+                ], spacing=16),
                 ft.ProgressBar(value=ratio, color="#22c55e", bgcolor="#e5e7eb", height=6, border_radius=4),
                 ft.Row([
                     ft.Text(f"Émise le {f['date_emission'][:10]}"
@@ -368,9 +367,9 @@ def FinanceView(page: ft.Page, client):
                     ),
                     ft.TextButton("Voir détail", icon=ft.icons.VISIBILITY,
                                    on_click=lambda e, fact=f: ouvrir_detail_facture(fact)),
-                ], wrap=True, run_spacing=4),
+                ]),
             ], spacing=8),
-            bgcolor=ft.colors.SURFACE, padding=14, border_radius=10, border=ft.border.all(1, ft.colors.OUTLINE_VARIANT),
+            bgcolor=ft.colors.SURFACE, padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
         )
 
     def charger():
@@ -392,22 +391,15 @@ def FinanceView(page: ft.Page, client):
     charger()
 
     titre = "Mes factures" if not client.can_see_finance else "Gestion financière"
-    mobile = _est_mobile(page)
-    filtre_statut.width = 220 if not mobile else None
-    filtre_statut.expand = mobile
 
     return ft.Container(
         content=ft.Column([
-            ft.Row(
-                [
-                    ft.Text(titre, size=20, weight=ft.FontWeight.BOLD),
-                    ft.Container(expand=True) if not mobile else ft.Container(width=0),
-                    filtre_statut,
-                    ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger(), tooltip="Actualiser"),
-                ],
-                wrap=True,
-                run_spacing=8,
-            ),
+            ft.Row([
+                ft.Text(titre, size=20, weight=ft.FontWeight.BOLD),
+                ft.Container(expand=True),
+                filtre_statut,
+                ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger(), tooltip="Actualiser"),
+            ]),
             ft.Divider(),
             content_area,
         ], spacing=10, expand=True),
