@@ -41,9 +41,9 @@ def TerrainView(page: ft.Page, client):
     }
 
     # ─── Zones de contenu ──────────────────────────────────────────────────────
-    zone_cimetiere = ft.Container(expand=True)
-    zone_zones = ft.Container(visible=False)
-    zone_blocs = ft.Container(visible=False)
+    zone_cimetiere = ft.Container()
+    zone_zones = ft.Container(visible=False, expand=True)
+    zone_blocs = ft.Container(visible=False, expand=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SECTION CIMETIÈRE
@@ -157,7 +157,7 @@ def TerrainView(page: ft.Page, client):
                     ),
                 ]),
             ], spacing=8),
-            bgcolor="white", padding=16, border_radius=12,
+            bgcolor=ft.colors.SURFACE, padding=16, border_radius=12,
             border=ft.border.all(1, "#e5e7eb"),
         )
 
@@ -185,7 +185,7 @@ def TerrainView(page: ft.Page, client):
                                           on_click=lambda e: ouvrir_dialogue_cimetiere()),
                     ]),
                     *[construire_carte_cimetiere(c) for c in cimetieres],
-                ], spacing=12, scroll=ft.ScrollMode.AUTO, expand=True)
+                ], spacing=12)
         except APIError as err:
             zone_cimetiere.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)
         page.update()
@@ -296,32 +296,39 @@ def TerrainView(page: ft.Page, client):
         libelle_type = dict(TYPE_ZONE_OPTIONS).get(z["type_zone"], z["type_zone"])
 
         return ft.Container(
-            content=ft.Row([
-                ft.Container(
-                    content=ft.Text(z["code"], color="white", size=13, weight=ft.FontWeight.BOLD),
-                    bgcolor=couleur, width=40, height=40,
-                    border_radius=8, alignment=ft.alignment.center,
-                ),
-                ft.Column([
-                    ft.Row([
-                        ft.Text(z["nom"], weight=ft.FontWeight.W_600),
-                        badge_generique(libelle_type, couleur),
-                    ], spacing=8),
-                    ft.Text(
-                        f"{z['superficie_m2']:,.0f} m² — {z['nombre_blocs']} bloc(s)",
-                        size=12, color="#6b7280",
-                    ),
-                ], spacing=4, expand=True),
+            content=ft.Column([
                 ft.Row([
-                    ft.IconButton(ft.icons.TABLE_CHART,
-                                  tooltip="Gérer les blocs",
-                                  on_click=lambda e, zone=z: selectionner_zone(zone)),
+                    ft.Container(
+                        content=ft.Text(z["code"], color="white", size=13, weight=ft.FontWeight.BOLD),
+                        bgcolor=couleur, width=40, height=40,
+                        border_radius=8, alignment=ft.alignment.center,
+                    ),
+                    ft.Column([
+                        ft.Row([
+                            ft.Text(z["nom"], weight=ft.FontWeight.W_600),
+                            badge_generique(libelle_type, couleur),
+                        ], spacing=8, wrap=True),
+                        ft.Text(
+                            f"{z['superficie_m2']:,.0f} m² — {z['nombre_blocs']} bloc(s)",
+                            size=12, color="#6b7280",
+                        ),
+                    ], spacing=4, expand=True),
+                ], spacing=12),
+                # Bouton pleine largeur, toujours visible (ne peut pas être
+                # poussé hors écran comme des icônes alignées à droite).
+                ft.Row([
+                    ft.OutlinedButton(
+                        "Voir les blocs de cette zone",
+                        icon=ft.icons.TABLE_CHART,
+                        on_click=lambda e, zone=z: selectionner_zone(zone),
+                        expand=True,
+                    ),
                     ft.IconButton(ft.icons.DELETE_OUTLINE,
                                   tooltip="Supprimer",
                                   on_click=lambda e, zone=z: supprimer_zone(zone)),
-                ]),
-            ], spacing=12),
-            bgcolor="white", padding=12, border_radius=10,
+                ], spacing=4),
+            ], spacing=10),
+            bgcolor=ft.colors.SURFACE, padding=12, border_radius=10,
             border=ft.border.all(1, "#e5e7eb"),
         )
 
@@ -380,7 +387,7 @@ def TerrainView(page: ft.Page, client):
                 ft.Divider(),
                 *([construire_carte_zone(z) for z in zones]
                   if zones else [etat_vide("Aucune zone créée.", ft.icons.GRID_VIEW)]),
-            ], spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+            ], spacing=10)
 
             zone_zones.content = contenu_zones
         except APIError as err:
@@ -542,7 +549,7 @@ def TerrainView(page: ft.Page, client):
                     ),
                 ]),
             ], spacing=8),
-            bgcolor="white", padding=14, border_radius=10,
+            bgcolor=ft.colors.SURFACE, padding=14, border_radius=10,
             border=ft.border.all(2 if not a_caveaux else 1, "#3b82f6" if not a_caveaux else "#e5e7eb"),
         )
 
@@ -587,7 +594,7 @@ def TerrainView(page: ft.Page, client):
                 ft.Divider(),
                 *([construire_carte_bloc(b) for b in blocs]
                   if blocs else [etat_vide("Aucun bloc créé.", ft.icons.TABLE_CHART)]),
-            ], spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+            ], spacing=10)
 
         except APIError as err:
             zone_blocs.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)

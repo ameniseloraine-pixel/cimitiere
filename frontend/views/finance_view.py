@@ -2,6 +2,7 @@
 Vue Finance — Factures et paiements multi-canal
 - Client : voit ses factures, peut consulter le solde
 - Admin/Secrétariat : enregistre les paiements (Mobile Money, Airtel Money, Espèces, Virement)
+NOUVEAU : bouton "Télécharger le PDF" sur chaque facture
 """
 
 import flet as ft
@@ -11,7 +12,7 @@ from components.widgets import (
     badge_generique, afficher_snackbar, chargement, etat_vide,
     bouton_principal, champ_texte, COULEURS_STATUT_FACTURE,
 )
-from config import COULEUR_PRIMAIRE
+from config import COULEUR_PRIMAIRE, API_BASE_URL
 
 
 CANAUX_PAIEMENT = [
@@ -24,7 +25,7 @@ CANAUX_PAIEMENT = [
 
 
 def FinanceView(page: ft.Page, client):
-    content_area = ft.Container(content=chargement("Chargement des factures..."), expand=True)
+    content_area = ft.Container(content=chargement("Chargement des factures..."))
     filtre_statut = ft.Dropdown(
         label="Filtrer par statut",
         width=220,
@@ -38,6 +39,30 @@ def FinanceView(page: ft.Page, client):
         value="",
         on_change=lambda e: charger(),
     )
+
+    # NOUVEAU : ouverture du PDF dans un nouvel onglet du navigateur du client.
+    #
+    # CORRECTIF (faille précédente) : l'ancienne version téléchargeait les
+    # octets du PDF côté serveur (client.telecharger_facture_pdf), les
+    # écrivait dans un fichier temporaire DU SERVEUR, puis appelait
+    # webbrowser.open("file:///...") — qui essaie d'ouvrir un navigateur
+    # sur le serveur Render (headless, sans interface graphique). En mode
+    # Flet Web (view=ft.AppView.WEB_BROWSER), tout le code Python s'exécute
+    # côté serveur : le PDF n'atteignait donc jamais le client, sans la
+    # moindre erreur visible (webbrowser.open() échoue silencieusement).
+    #
+    # Corrigé ici en demandant au navigateur DU CLIENT (via page.launch_url,
+    # qui envoie l'ordre d'ouverture au client via le websocket Flet)
+    # d'ouvrir directement l'URL de l'endpoint PDF du backend. Le token
+    # JWT est passé en paramètre d'URL car un lien de navigateur classique
+    # ne peut pas envoyer de header Authorization (voir auth_telechargement
+    # côté backend, apps/users/api.py).
+    def telecharger_pdf(facture: dict):
+        try:
+            url = f"{API_BASE_URL}/finance/factures/{facture['id']}/pdf?token={client.access_token}"
+            page.launch_url(url)
+        except Exception:
+            afficher_snackbar(page, "Impossible d'ouvrir le PDF.", succes=False)
 
     def ouvrir_dialogue_paiement(facture: dict):
         canal_dd = ft.Dropdown(
@@ -129,7 +154,6 @@ def FinanceView(page: ft.Page, client):
 
         loading = ft.ProgressRing(visible=False, width=18, height=18, stroke_width=2)
 
-        # Conteneurs pour les deux étapes du dialogue
         step1 = ft.Column([info_solde, canal_dd, telephone_field, montant_field], spacing=10, tight=True)
         step2 = ft.Column(visible=False, spacing=10, tight=True)
 
@@ -256,6 +280,15 @@ def FinanceView(page: ft.Page, client):
         ] or [ft.Text("Aucun paiement enregistré.", size=12, color="#9ca3af")]
 
         actions = []
+
+        # NOUVEAU : bouton téléchargement PDF, toujours visible
+        actions.append(
+            ft.OutlinedButton(
+                "Télécharger le PDF", icon=ft.icons.PICTURE_AS_PDF,
+                on_click=lambda e: telecharger_pdf(facture),
+            )
+        )
+
         # Paiement self-service Mobile Money / Airtel : accessible au client
         # lui-même (et au staff, pour un paiement assisté au guichet).
         if facture["statut"] not in ("PAYEE", "ANNULEE", "BROUILLON"):
@@ -327,11 +360,16 @@ def FinanceView(page: ft.Page, client):
                             + (f" — Échéance : {f['date_echeance']}" if f.get("date_echeance") else ""),
                             size=11, color="#9ca3af"),
                     ft.Container(expand=True),
+                    # NOUVEAU : téléchargement direct depuis la carte
+                    ft.IconButton(
+                        ft.icons.PICTURE_AS_PDF, tooltip="Télécharger le PDF",
+                        on_click=lambda e, fact=f: telecharger_pdf(fact),
+                    ),
                     ft.TextButton("Voir détail", icon=ft.icons.VISIBILITY,
                                    on_click=lambda e, fact=f: ouvrir_detail_facture(fact)),
                 ]),
             ], spacing=8),
-            bgcolor="white", padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
+            bgcolor=ft.colors.SURFACE, padding=14, border_radius=10, border=ft.border.all(1, "#e5e7eb"),
         )
 
     def charger():
@@ -344,7 +382,7 @@ def FinanceView(page: ft.Page, client):
             else:
                 content_area.content = ft.Column(
                     [construire_carte_facture(f) for f in factures],
-                    spacing=10, scroll=ft.ScrollMode.AUTO, expand=True,
+                    spacing=10,
                 )
         except APIError as err:
             content_area.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)

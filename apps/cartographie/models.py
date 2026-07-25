@@ -100,6 +100,32 @@ class Caveau(gis_models.Model):
         """Définit la localisation à partir d'une latitude/longitude classiques."""
         self.localisation = Point(float(longitude), float(latitude), srid=4326)
 
+    # CORRECTIF (faille précédente) : seul l'endpoint
+    # /blocs/{id}/generer-caveaux calculait une `localisation`. Tout caveau
+    # créé autrement (admin Django, fixture, script, création manuelle) restait
+    # avec `localisation = NULL` -> la vue GPS le trouvait invisible et
+    # affichait "Aucun caveau ne possède de coordonnées GPS" (l'écran grisé
+    # que tu voyais). Il fallait exécuter à la main la commande
+    # `manage.py fix_coordonnees` pour rattraper le coup.
+    # Corrigé ici : si un caveau est enregistré sans coordonnées, on lui
+    # calcule automatiquement une position de secours dérivée de sa rangée/
+    # colonne et de la position de son bloc — aucun caveau ne reste plus
+    # jamais sans coordonnées, quel que soit son mode de création.
+    LATITUDE_BASE_DEFAUT = -4.7761
+    LONGITUDE_BASE_DEFAUT = 11.8636
+    PAS_DEGRES_DEFAUT = 0.0001
+
+    def _generer_coordonnees_fallback(self):
+        decalage_bloc = (self.bloc_id or 0) * 0.002
+        lat = self.LATITUDE_BASE_DEFAUT + decalage_bloc + (self.rangee - 1) * self.PAS_DEGRES_DEFAUT
+        lon = self.LONGITUDE_BASE_DEFAUT + (self.colonne - 1) * self.PAS_DEGRES_DEFAUT
+        return Point(round(lon, 7), round(lat, 7), srid=4326)
+
+    def save(self, *args, **kwargs):
+        if self.localisation is None:
+            self.localisation = self._generer_coordonnees_fallback()
+        super().save(*args, **kwargs)
+
     def changer_statut(self, nouveau_statut, utilisateur=None, raison=""):
         """Change le statut avec journalisation dans l'audit trail."""
         ancien_statut = self.statut

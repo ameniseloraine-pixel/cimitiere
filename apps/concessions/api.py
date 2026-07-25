@@ -122,7 +122,7 @@ def _build_exhumation_out(e: Exhumation) -> ExhumationOutSchema:
     )
 
 
-# ─── Concessions ─────────────────────────────────────────────────────────────
+# ─── Concessions : routes spécifiques (SANS paramètre) — en premier ──────────
 
 @router.post("/", response={201: ConcessionOutSchema, 400: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema}, auth=auth)
 def creer_concession(request, data: ConcessionCreateSchema):
@@ -200,65 +200,9 @@ def concessions_en_alerte(request):
     return [_build_concession_out(c) for c in toutes if c.necessite_alerte]
 
 
-@router.get("/{concession_id}", response={200: ConcessionOutSchema, 403: ErrorSchema, 404: ErrorSchema}, auth=auth)
-def detail_concession(request, concession_id: int):
-    """Détail d'une concession."""
-    c = get_object_or_404(
-        Concession.objects.select_related("titulaire", "reservation__caveau__bloc__zone__cimetiere"),
-        id=concession_id
-    )
-    if request.auth.role == RoleUtilisateur.CLIENT and c.titulaire != request.auth:
-        return 403, {"detail": "Accès refusé."}
-    return 200, _build_concession_out(c)
-
-
-@router.post("/{concession_id}/renouveler", response={201: ConcessionOutSchema, 403: ErrorSchema, 404: ErrorSchema, 400: ErrorSchema}, auth=auth)
-def renouveler_concession(request, concession_id: int, data: RenouvellementSchema):
-    """
-    Renouveler une concession (Admin/Secrétariat).
-    Crée un nouveau contrat lié à l'ancien.
-    """
-    if not request.auth.peut_valider_reservations:
-        return 403, {"detail": "Permission insuffisante."}
-
-    c = get_object_or_404(Concession, id=concession_id)
-
-    if c.est_perpetuelle:
-        return 400, {"detail": "Une concession perpétuelle n'a pas besoin d'être renouvelée."}
-
-    nouveau_type = data.nouveau_type or c.type_concession
-    nouvelle_concession = c.renouveler(nouveau_type=nouveau_type)
-
-    return 201, _build_concession_out(nouvelle_concession)
-
-
-@router.post("/{concession_id}/resilier", response={200: ConcessionOutSchema, 403: ErrorSchema, 404: ErrorSchema, 400: ErrorSchema}, auth=auth)
-def resilier_concession(request, concession_id: int, data: ResiliationSchema):
-    """Résilier une concession active (Admin uniquement)."""
-    if not request.auth.est_admin:
-        return 403, {"detail": "Seul un administrateur peut résilier une concession."}
-
-    c = get_object_or_404(Concession, id=concession_id)
-
-    if c.statut != StatutConcession.ACTIVE:
-        return 400, {"detail": f"Impossible de résilier une concession avec le statut '{c.get_statut_display()}'."}
-
-    c.statut = StatutConcession.RESILIEE
-    c._change_reason = f"Résiliation par {request.auth.nom_complet}. Motif : {data.motif}"
-    c.save()
-
-    # Libérer le caveau
-    from apps.cartographie.models import StatutCaveau
-    c.reservation.caveau.changer_statut(
-        StatutCaveau.DISPONIBLE,
-        utilisateur=request.auth,
-        raison=f"Concession {c.numero_contrat} résiliée"
-    )
-
-    return 200, _build_concession_out(c)
-
-
-# ─── Exhumations ─────────────────────────────────────────────────────────────
+# ─── Exhumations : routes spécifiques SANS paramètre — AVANT /{concession_id} ─
+# IMPORTANT : ces routes doivent être déclarées avant /{concession_id}...
+# sinon Django Ninja tente de parser "exhumations" comme un entier.
 
 @router.post("/exhumations", response={201: ExhumationOutSchema, 400: ErrorSchema, 404: ErrorSchema}, auth=auth)
 def soumettre_exhumation(request, data: ExhumationCreateSchema):
@@ -379,3 +323,63 @@ def marquer_exhumation_realisee(request, exhumation_id: int, date_realisation: d
     e.concession.save()
 
     return 200, _build_exhumation_out(e)
+
+
+# ─── Concessions : routes avec paramètre {concession_id} — APRÈS exhumations ─
+
+@router.get("/{concession_id}", response={200: ConcessionOutSchema, 403: ErrorSchema, 404: ErrorSchema}, auth=auth)
+def detail_concession(request, concession_id: int):
+    """Détail d'une concession."""
+    c = get_object_or_404(
+        Concession.objects.select_related("titulaire", "reservation__caveau__bloc__zone__cimetiere"),
+        id=concession_id
+    )
+    if request.auth.role == RoleUtilisateur.CLIENT and c.titulaire != request.auth:
+        return 403, {"detail": "Accès refusé."}
+    return 200, _build_concession_out(c)
+
+
+@router.post("/{concession_id}/renouveler", response={201: ConcessionOutSchema, 403: ErrorSchema, 404: ErrorSchema, 400: ErrorSchema}, auth=auth)
+def renouveler_concession(request, concession_id: int, data: RenouvellementSchema):
+    """
+    Renouveler une concession (Admin/Secrétariat).
+    Crée un nouveau contrat lié à l'ancien.
+    """
+    if not request.auth.peut_valider_reservations:
+        return 403, {"detail": "Permission insuffisante."}
+
+    c = get_object_or_404(Concession, id=concession_id)
+
+    if c.est_perpetuelle:
+        return 400, {"detail": "Une concession perpétuelle n'a pas besoin d'être renouvelée."}
+
+    nouveau_type = data.nouveau_type or c.type_concession
+    nouvelle_concession = c.renouveler(nouveau_type=nouveau_type)
+
+    return 201, _build_concession_out(nouvelle_concession)
+
+
+@router.post("/{concession_id}/resilier", response={200: ConcessionOutSchema, 403: ErrorSchema, 404: ErrorSchema, 400: ErrorSchema}, auth=auth)
+def resilier_concession(request, concession_id: int, data: ResiliationSchema):
+    """Résilier une concession active (Admin uniquement)."""
+    if not request.auth.est_admin:
+        return 403, {"detail": "Seul un administrateur peut résilier une concession."}
+
+    c = get_object_or_404(Concession, id=concession_id)
+
+    if c.statut != StatutConcession.ACTIVE:
+        return 400, {"detail": f"Impossible de résilier une concession avec le statut '{c.get_statut_display()}'."}
+
+    c.statut = StatutConcession.RESILIEE
+    c._change_reason = f"Résiliation par {request.auth.nom_complet}. Motif : {data.motif}"
+    c.save()
+
+    # Libérer le caveau
+    from apps.cartographie.models import StatutCaveau
+    c.reservation.caveau.changer_statut(
+        StatutCaveau.DISPONIBLE,
+        utilisateur=request.auth,
+        raison=f"Concession {c.numero_contrat} résiliée"
+    )
+
+    return 200, _build_concession_out(c)

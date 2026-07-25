@@ -4,6 +4,7 @@ Stack : Django 4.2 + Django Ninja + PostgreSQL/PostGIS
 """
 
 import os
+import platform
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
@@ -14,16 +15,17 @@ SECRET_KEY = config("SECRET_KEY", default="dev-secret-key-changez-moi-en-product
 DEBUG = config("DEBUG", default=True, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
 
-# ─── GDAL / GEOS (Windows) ──────────────────────────────────────────────────
-# Chemins vers les DLL installées via le paquet GDAL pour Windows.
-# Si tu as installé GDAL ailleurs, adapte ces deux chemins.
-GDAL_LIBRARY_PATH = config("GDAL_LIBRARY_PATH", default=r"C:\Program Files\GDAL\gdal312.dll")
-GEOS_LIBRARY_PATH = config("GEOS_LIBRARY_PATH", default=r"C:\Program Files\GDAL\geos_c.dll")
+# ─── GDAL / GEOS ─────────────────────────────────────────────────────────────
+if platform.system() == "Windows":
+    GDAL_LIBRARY_PATH = config("GDAL_LIBRARY_PATH", default=r"C:\Program Files\GDAL\gdal312.dll")
+    GEOS_LIBRARY_PATH = config("GEOS_LIBRARY_PATH", default=r"C:\Program Files\GDAL\geos_c.dll")
 
-# Ajouter le dossier GDAL au PATH système pour que les DLL annexes se chargent
-_gdal_bin_dir = os.path.dirname(GDAL_LIBRARY_PATH)
-if os.path.isdir(_gdal_bin_dir):
-    os.environ["PATH"] = _gdal_bin_dir + os.pathsep + os.environ.get("PATH", "")
+    _gdal_bin_dir = os.path.dirname(GDAL_LIBRARY_PATH)
+    if os.path.isdir(_gdal_bin_dir):
+        os.environ["PATH"] = _gdal_bin_dir + os.pathsep + os.environ.get("PATH", "")
+else:
+    GDAL_LIBRARY_PATH = config("GDAL_LIBRARY_PATH", default=None)
+    GEOS_LIBRARY_PATH = config("GEOS_LIBRARY_PATH", default=None)
 
 # ─── Applications ─────────────────────────────────────────────────────────────
 DJANGO_APPS = [
@@ -39,8 +41,8 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "ninja",
     "corsheaders",
-    "simple_history",           # Audit trail immuable
-    "django_celery_beat",       # Tâches planifiées (optionnel en dev)
+    "simple_history",
+    "django_celery_beat",
     "django_filters",
 ]
 
@@ -93,16 +95,29 @@ TEMPLATES = [
 ]
 
 # ─── Base de données — PostgreSQL + PostGIS ───────────────────────────────────
-DATABASES = {
-    "default": {
-        "ENGINE": "django.contrib.gis.db.backends.postgis",
-        "NAME": config("DB_NAME", default="cimetiere_db"),
-        "USER": config("DB_USER", default="postgres"),
-        "PASSWORD": config("DB_PASSWORD", default=""),
-        "HOST": config("DB_HOST", default="localhost"),
-        "PORT": config("DB_PORT", default="5432"),
+import dj_database_url  # noqa: E402
+
+DATABASE_URL = config("DATABASE_URL", default=None)
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            engine="django.contrib.gis.db.backends.postgis",
+            conn_max_age=600,
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.contrib.gis.db.backends.postgis",
+            "NAME": config("DB_NAME", default="cimetiere_db"),
+            "USER": config("DB_USER", default="postgres"),
+            "PASSWORD": config("DB_PASSWORD", default=""),
+            "HOST": config("DB_HOST", default="localhost"),
+            "PORT": config("DB_PORT", default="5432"),
+        }
+    }
 
 # ─── Modèle utilisateur personnalisé ──────────────────────────────────────────
 AUTH_USER_MODEL = "users.Utilisateur"
@@ -126,31 +141,18 @@ SIMPLE_JWT = {
 MFA_CODE_VALIDITY_MINUTES = config("MFA_CODE_VALIDITY_MINUTES", default=10, cast=int)
 MFA_CODE_LENGTH = 6
 
-# ─── Email ────────────────────────────────────────────────────────────────────
-# En développement : les emails s'affichent dans la console (pas d'envoi réel)
-# Mettre EMAIL_BACKEND=smtp dans .env pour activer l'envoi réel
-EMAIL_BACKEND_DEV = "django.core.mail.backends.console.EmailBackend"
-EMAIL_BACKEND_PROD = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_BACKEND = config("EMAIL_BACKEND", default=EMAIL_BACKEND_DEV)
-
-EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
-EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
-EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
-EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
-EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+# ─── Email (via API Brevo — HTTPS, contourne le blocage SMTP de Render) ───────
+BREVO_API_KEY = config("BREVO_API_KEY", default="")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@cimetiere.app")
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-]
+CORS_ALLOWED_ORIGINS = config(
+    "CORS_ALLOWED_ORIGINS",
+    default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000",
+).split(",")
 CORS_ALLOW_CREDENTIALS = True
 
 # ─── Celery ───────────────────────────────────────────────────────────────────
-# Optionnel en développement — les tâches async tournent en mode synchrone
-# si Celery n'est pas démarré (les try/except dans les tasks l'absorbent)
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0")
 CELERY_TIMEZONE = "Africa/Brazzaville"

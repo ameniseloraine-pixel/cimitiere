@@ -71,7 +71,7 @@ def carte_stat(titre: str, valeur, icone: str, couleur: str = COULEUR_PRIMAIRE) 
             ], spacing=10),
             ft.Text(titre, size=13, color="#6b7280"),
         ], spacing=6),
-        bgcolor="white",
+        bgcolor=ft.colors.SURFACE,
         padding=16,
         border_radius=12,
         border=ft.border.all(1, "#e5e7eb"),

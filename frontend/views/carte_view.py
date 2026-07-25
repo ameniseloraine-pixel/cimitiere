@@ -2,14 +2,21 @@
 Vue Cartographie — Carte interactive des caveaux
 Représentation en grille colorée par statut (Vert/Orange/Rouge/Gris)
 Cliquer sur un caveau ouvre le détail + actions (réserver / changer statut)
+
+Vue GPS : ouvre systématiquement un nouvel onglet du navigateur avec la
+carte Leaflet, servie par une vraie URL backend (/carte/carte-html).
+On a abandonné la WebView intégrée (trop de couches bloquantes : Flet +
+navigateur + CORS + X-Frame-Options), au profit de page.launch_url qui
+fonctionne de façon fiable sur toutes les plateformes.
 """
 
+import urllib.parse
 import flet as ft
 from collections import defaultdict
 
 from api_client import APIError
 from components.widgets import badge_statut, afficher_snackbar, chargement, etat_vide, bouton_principal
-from config import COULEURS_STATUT, LIBELLES_STATUT, COULEUR_PRIMAIRE
+from config import COULEURS_STATUT, LIBELLES_STATUT, COULEUR_PRIMAIRE, API_BASE_URL
 
 
 def CarteView(page: ft.Page, client, on_reserver_caveau):
@@ -18,11 +25,13 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
     clique sur "Réserver" pour un caveau disponible.
     """
 
-    content_area = ft.Container(content=chargement("Chargement de la carte..."), expand=True)
-    filtre_zone = ft.Dropdown(label="Zone", width=180, options=[], on_change=lambda e: charger_carte())
+    est_mobile = page.width is not None and page.width < 700
+
+    content_area = ft.Container(content=chargement("Chargement de la carte..."))
+    filtre_zone = ft.Dropdown(label="Zone", width=130 if est_mobile else 180, options=[], on_change=lambda e: charger_carte())
     filtre_statut = ft.Dropdown(
         label="Statut",
-        width=200,
+        width=140 if est_mobile else 200,
         options=[ft.dropdown.Option("", "Tous les statuts")] + [
             ft.dropdown.Option(k, v) for k, v in LIBELLES_STATUT.items()
         ],
@@ -39,19 +48,15 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
     ], spacing=16, wrap=True)
 
     def ouvrir_detail_caveau(caveau: dict):
-        """Ouvre un dialogue avec le détail du caveau et les actions disponibles."""
-
         statut = caveau["statut"]
         actions = []
 
-        # Action client : réserver si disponible
         if statut == "DISPO" and not client.is_admin and not client.can_edit_map:
             def reserver(e):
                 page.close(dlg)
                 on_reserver_caveau(caveau)
             actions.append(bouton_principal("Réserver ce caveau", on_click=reserver, icone=ft.icons.BOOKMARK_ADD))
 
-        # Action agent/admin : changer le statut manuellement
         if client.can_edit_map:
             nouveau_statut_dd = ft.Dropdown(
                 label="Nouveau statut",
@@ -98,11 +103,9 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
         page.open(dlg)
 
     def construire_grille(caveaux: list) -> ft.Control:
-        """Construit une grille de caveaux groupés par zone et bloc."""
         if not caveaux:
             return etat_vide("Aucun caveau trouvé pour ces filtres.", ft.icons.MAP_OUTLINED)
 
-        # Grouper par zone puis bloc
         zones = defaultdict(lambda: defaultdict(list))
         for c in caveaux:
             zones[c["zone_code"]][c["bloc_code"]].append(c)
@@ -113,7 +116,6 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
             for bloc_code, caveaux_bloc in sorted(blocs.items()):
                 caveaux_bloc.sort(key=lambda c: c["numero"])
 
-                # Calculer le nombre de colonnes pour la grille (carré approximatif)
                 tuiles = [
                     ft.Container(
                         width=36, height=36,
@@ -147,7 +149,17 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                 ft.Row(bloc_sections, wrap=True, spacing=12, run_spacing=12),
             ], spacing=10))
 
-        return ft.Column(sections, spacing=24, scroll=ft.ScrollMode.AUTO, expand=True)
+        return ft.Column(sections, spacing=24)
+
+    # ─── Construction de l'URL réelle de la carte GPS (backend) ───────────────
+
+    def _construire_url_carte_gps() -> str:
+        params = {"token": client.access_token or ""}
+        if filtre_statut.value:
+            params["statut"] = filtre_statut.value
+        if filtre_zone.value:
+            params["zone_code"] = filtre_zone.value
+        return f"{API_BASE_URL}/carte/carte-html?{urllib.parse.urlencode(params)}"
 
     def charger_carte():
         content_area.content = chargement("Chargement de la carte...")
@@ -159,7 +171,6 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
                 zone_code=filtre_zone.value or None,
             )
 
-            # Remplir les zones disponibles dans le filtre (une seule fois)
             if not filtre_zone.options:
                 zones_uniques = sorted(set(c["zone_code"] for c in caveaux))
                 filtre_zone.options = [ft.dropdown.Option("", "Toutes les zones")] + [
@@ -172,18 +183,35 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
 
         page.update()
 
-    # Chargement initial
+    # ─── Clic sur le bouton "Vue GPS" : ouvre systématiquement un nouvel onglet ─
+
+    def basculer_vue(e):
+        url = _construire_url_carte_gps()
+        page.launch_url(url)
+
+    btn_bascule = ft.OutlinedButton(
+        text="Vue GPS",
+        icon=ft.icons.MAP,
+        on_click=basculer_vue,
+    )
+
     charger_carte()
 
     return ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text("Carte interactive du cimetière", size=20, weight=ft.FontWeight.BOLD),
-                ft.Container(expand=True),
+                ft.Text(
+                    "Carte interactive du cimetière" if not est_mobile else "Carte du cimetière",
+                    size=20 if not est_mobile else 16,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                ft.Container(expand=True) if not est_mobile else ft.Container(width=8),
+                btn_bascule,
                 filtre_zone,
                 filtre_statut,
                 ft.IconButton(ft.icons.REFRESH, on_click=lambda e: charger_carte(), tooltip="Actualiser"),
-            ], alignment=ft.MainAxisAlignment.START),
+            ], alignment=ft.MainAxisAlignment.START, spacing=10,
+               scroll=ft.ScrollMode.AUTO if est_mobile else None),
             ft.Container(
                 content=legende,
                 padding=ft.padding.symmetric(vertical=8),
@@ -191,6 +219,6 @@ def CarteView(page: ft.Page, client, on_reserver_caveau):
             ft.Divider(),
             content_area,
         ], spacing=10, expand=True),
-        padding=20,
+        padding=12 if est_mobile else 20,
         expand=True,
     )

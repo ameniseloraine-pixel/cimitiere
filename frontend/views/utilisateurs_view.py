@@ -16,7 +16,7 @@ ROLES_DISPONIBLES = [
 
 
 def UtilisateursView(page: ft.Page, client):
-    content_area = ft.Container(content=chargement("Chargement des utilisateurs..."), expand=True)
+    content_area = ft.Container(content=chargement("Chargement des utilisateurs..."))
 
     if not client.is_admin:
         return ft.Container(
@@ -110,7 +110,7 @@ def UtilisateursView(page: ft.Page, client):
             ], spacing=10),
             ft.Divider(),
             *lignes,
-        ], spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+        ], spacing=10)
 
     def charger_utilisateurs():
         content_area.content = chargement("Chargement...")

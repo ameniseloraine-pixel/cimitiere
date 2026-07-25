@@ -3,22 +3,21 @@ Tâches Celery — Notifications & Génération de documents PDF
 Toutes les tâches sont asynchrones et journalisées dans le modèle Notification.
 """
 
-import io
+import base64
+import requests
 from celery import shared_task
 from django.conf import settings
-from django.core.mail import EmailMessage
-from django.template.loader import render_to_string
 from django.utils import timezone
 
 from .models import Notification, TypeNotification, StatutNotification
 
 
-# ─── Helper générique d'envoi ────────────────────────────────────────────────
+# ─── Helper générique d'envoi (via API Brevo — HTTPS) ─────────────────────────
 
 def _envoyer_email(destinataire, type_notif, sujet, corps_html, corps_texte="",
                     pieces_jointes=None, reference_type="", reference_id=None):
     """
-    Crée un log Notification puis envoie l'email.
+    Crée un log Notification puis envoie l'email via l'API Brevo.
     pieces_jointes : liste de tuples (nom_fichier, contenu_bytes, mime_type)
     """
     notif = Notification.objects.create(
@@ -32,19 +31,35 @@ def _envoyer_email(destinataire, type_notif, sujet, corps_html, corps_texte="",
     )
 
     try:
-        email = EmailMessage(
-            subject=sujet,
-            body=corps_texte or corps_html,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[destinataire.email],
-        )
-        email.content_subtype = "plain"
+        payload = {
+            "sender": {"name": "Gestion Cimetière", "email": settings.DEFAULT_FROM_EMAIL},
+            "to": [{"email": destinataire.email}],
+            "subject": sujet,
+            "htmlContent": f"<pre>{corps_texte or corps_html}</pre>",
+        }
 
         if pieces_jointes:
-            for nom, contenu, mime in pieces_jointes:
-                email.attach(nom, contenu, mime)
+            payload["attachment"] = [
+                {
+                    "name": nom,
+                    "content": base64.b64encode(contenu).decode("utf-8"),
+                }
+                for (nom, contenu, mime) in pieces_jointes
+            ]
 
-        email.send(fail_silently=False)
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "api-key": settings.BREVO_API_KEY,
+                "Content-Type": "application/json",
+                "accept": "application/json",
+            },
+            json=payload,
+            timeout=15,
+        )
+
+        if response.status_code >= 400:
+            raise Exception(f"Échec envoi email Brevo: {response.status_code} - {response.text}")
 
         notif.statut = StatutNotification.ENVOYEE
         notif.date_envoi = timezone.now()
@@ -208,10 +223,23 @@ L'équipe de gestion du cimetière
 
 @shared_task
 def envoyer_confirmation_paiement(facture_id):
-    """Envoie une confirmation de paiement intégral."""
-    from apps.finance.models import Facture
+    """
+    Envoie une confirmation de paiement intégral, avec le reçu PDF en
+    pièce jointe.
 
-    facture = Facture.objects.select_related("client").get(id=facture_id)
+    CORRECTIF (faille précédente) : cette notification n'attachait
+    jusqu'ici aucun document — le client recevait un email de
+    confirmation sans aucune preuve de paiement téléchargeable, alors
+    que le CdC prévoit la génération et l'envoi de documents (factures,
+    certificats). Utilise désormais generer_pdf_recu_paiement, qui
+    liste l'historique des paiements et confirme le solde.
+    """
+    from apps.finance.models import Facture
+    from .pdf_generators import generer_pdf_recu_paiement
+
+    facture = Facture.objects.select_related("client").prefetch_related("paiements").get(id=facture_id)
+
+    pdf_bytes = generer_pdf_recu_paiement(facture)
 
     sujet = f"[Cimetière] Facture {facture.numero_facture} — Paiement reçu"
     corps = f"""
@@ -219,6 +247,8 @@ Bonjour {facture.client.prenom},
 
 Nous confirmons la réception du paiement intégral pour la facture {facture.numero_facture}
 d'un montant total de {facture.montant_total:,.0f} FCFA.
+
+Vous trouverez ci-joint votre reçu de paiement.
 
 Merci pour votre confiance.
 
@@ -229,6 +259,7 @@ L'équipe de gestion du cimetière
     _envoyer_email(
         facture.client, TypeNotification.FACTURE_EMISE,
         sujet, corps,
+        pieces_jointes=[(f"{facture.numero_facture}_recu.pdf", pdf_bytes, "application/pdf")],
         reference_type="facture", reference_id=facture.id,
     )
 
@@ -257,7 +288,6 @@ def verifier_retards_paiement():
             facture.statut = StatutFacture.EN_RETARD
             facture.save(update_fields=["statut"])
 
-        # Notifier le client
         sujet = f"[Cimetière] Rappel — Facture {facture.numero_facture} en retard"
         corps = f"""
 Bonjour {facture.client.prenom},
@@ -277,7 +307,6 @@ L'équipe de gestion du cimetière
             reference_type="facture", reference_id=facture.id,
         )
 
-        # Notifier les admins
         for admin in admins:
             sujet_admin = f"[Cimetière] Retard de paiement — {facture.numero_facture}"
             corps_admin = f"""
@@ -314,7 +343,6 @@ def generer_contrat_concession(concession_id):
         save=True
     )
 
-    # Envoyer au titulaire
     sujet = f"[Cimetière] Contrat de concession {concession.numero_contrat}"
     corps = f"""
 Bonjour {concession.titulaire.prenom},
@@ -363,12 +391,10 @@ def verifier_concessions_expirantes():
 
         jours = concession.jours_avant_expiration
 
-        # Marquer en alerte
         if concession.statut != StatutConcession.EN_ALERTE:
             concession.statut = StatutConcession.EN_ALERTE
             concession.save(update_fields=["statut"])
 
-        # Notifier le titulaire
         sujet = f"[Cimetière] Votre concession {concession.numero_contrat} expire dans {jours} jours"
         corps = f"""
 Bonjour {concession.titulaire.prenom},
@@ -389,7 +415,6 @@ L'équipe de gestion du cimetière
             reference_type="concession", reference_id=concession.id,
         )
 
-        # Notifier les admins
         for admin in admins:
             sujet_admin = f"[Cimetière] Concession {concession.numero_contrat} expire dans {jours} jours"
             corps_admin = f"""
@@ -451,14 +476,12 @@ def generer_autorisation_exhumation(exhumation_id):
         "demandeur", "autorisee_par"
     ).get(id=exhumation_id)
 
-    # Générer l'autorisation
     pdf_autorisation = generer_pdf_autorisation_exhumation(exhumation)
     exhumation.autorisation_pdf.save(
         f"{exhumation.numero_demande}_autorisation.pdf",
         ContentFile(pdf_autorisation), save=False
     )
 
-    # Générer le PV
     pdf_pv = generer_pdf_pv_exhumation(exhumation)
     exhumation.proces_verbal_pdf.save(
         f"{exhumation.numero_demande}_pv.pdf",

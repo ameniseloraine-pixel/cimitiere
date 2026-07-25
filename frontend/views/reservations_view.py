@@ -15,7 +15,7 @@ from config import COULEUR_PRIMAIRE
 
 
 def ReservationsView(page: ft.Page, client):
-    content_area = ft.Container(content=chargement("Chargement des réservations..."), expand=True)
+    content_area = ft.Container(content=chargement("Chargement des réservations..."))
     filtre_statut = ft.Dropdown(
         label="Filtrer par statut",
         width=220,
@@ -154,7 +154,7 @@ def ReservationsView(page: ft.Page, client):
 
         return ft.Container(
             content=ft.Column(infos, spacing=6),
-            bgcolor="white",
+            bgcolor=ft.colors.SURFACE,
             padding=14,
             border_radius=10,
             border=ft.border.all(1, "#e5e7eb"),
@@ -170,7 +170,7 @@ def ReservationsView(page: ft.Page, client):
             else:
                 content_area.content = ft.Column(
                     [construire_carte_reservation(r) for r in reservations],
-                    spacing=10, scroll=ft.ScrollMode.AUTO, expand=True,
+                    spacing=10,
                 )
         except APIError as err:
             content_area.content = etat_vide(f"Erreur : {err.detail}", ft.icons.ERROR_OUTLINE)

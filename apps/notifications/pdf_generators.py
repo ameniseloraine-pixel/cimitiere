@@ -194,6 +194,110 @@ def generer_pdf_facture(facture) -> bytes:
     return buffer.read()
 
 
+# ─── REÇU DE PAIEMENT ────────────────────────────────────────────────────────
+# NOUVEAU : jusqu'ici, aucun document PDF n'était généré pour confirmer un
+# paiement — seule la facture existait. Ce reçu liste l'historique des
+# paiements et confirme que la facture est soldée.
+
+def generer_pdf_recu_paiement(facture) -> bytes:
+    """Génère le PDF du reçu de paiement pour une facture soldée (ou partiellement payée)."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        topMargin=2 * cm, bottomMargin=2 * cm,
+        leftMargin=2 * cm, rightMargin=2 * cm,
+    )
+    styles = _styles()
+    elements = []
+
+    elements.append(_header_table(
+        "REÇU DE PAIEMENT", facture.numero_facture,
+        datetime.now().strftime("%d/%m/%Y")
+    ))
+    elements.append(Spacer(1, 0.5 * cm))
+    elements.append(HRFlowable(width="100%", color=COULEUR_PRIMAIRE, thickness=1.5))
+    elements.append(Spacer(1, 0.5 * cm))
+
+    elements.append(Paragraph("Réglé par :", styles["SectionTitre"]))
+    elements.append(Paragraph(
+        f"{facture.client.nom_complet}<br/>{facture.client.email}"
+        + (f"<br/>{facture.client.telephone}" if facture.client.telephone else ""),
+        styles["CorpsTexte"]
+    ))
+
+    if facture.reservation:
+        elements.append(Spacer(1, 0.2 * cm))
+        elements.append(Paragraph(
+            f"<b>Réf. dossier :</b> {facture.reservation.numero_dossier} — "
+            f"Caveau : {facture.reservation.caveau.reference_complete}",
+            styles["CorpsTexte"]
+        ))
+
+    elements.append(Spacer(1, 0.6 * cm))
+    elements.append(Paragraph("Historique des paiements", styles["SectionTitre"]))
+
+    data = [["Date", "Canal", "Référence", "Montant (FCFA)"]]
+    for p in facture.paiements.all().order_by("date_paiement"):
+        data.append([
+            p.date_paiement.strftime("%d/%m/%Y %H:%M"),
+            p.get_canal_display(),
+            p.reference_transaction or "—",
+            f"{p.montant:,.0f}",
+        ])
+
+    table = Table(data, colWidths=[4 * cm, 5 * cm, 4 * cm, 4 * cm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), COULEUR_PRIMAIRE),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, COULEUR_GRIS_CLAIR]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 0.6 * cm))
+
+    recap_data = [
+        ["Montant total de la facture", f"{facture.montant_total:,.0f} FCFA"],
+        ["Total payé", f"{facture.montant_paye:,.0f} FCFA"],
+        ["Solde restant", f"{facture.solde_restant:,.0f} FCFA"],
+    ]
+    recap_table = Table(recap_data, colWidths=[10.5 * cm, 6.5 * cm])
+    recap_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, -1), (-1, -1), 12),
+        ("LINEABOVE", (0, -1), (-1, -1), 1, COULEUR_PRIMAIRE),
+        ("TEXTCOLOR", (0, -1), (-1, -1), COULEUR_PRIMAIRE),
+    ]))
+    elements.append(recap_table)
+    elements.append(Spacer(1, 0.8 * cm))
+
+    if facture.est_soldee:
+        elements.append(Paragraph(
+            "<b>Cette facture est intégralement soldée.</b> Merci pour votre confiance.",
+            styles["CorpsTexte"]
+        ))
+    else:
+        elements.append(Paragraph(
+            "Ce reçu confirme les paiements reçus à ce jour. La facture reste "
+            "partiellement due — voir solde restant ci-dessus.",
+            styles["CorpsTexte"]
+        ))
+
+    doc.build(elements, onFirstPage=_footer_canvas, onLaterPages=_footer_canvas)
+    buffer.seek(0)
+    return buffer.read()
+
+
 # ─── CONTRAT DE CONCESSION ──────────────────────────────────────────────────────
 
 def generer_pdf_contrat_concession(concession) -> bytes:

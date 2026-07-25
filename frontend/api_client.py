@@ -47,7 +47,6 @@ class APIClient:
         except requests.exceptions.Timeout:
             raise APIError(0, "Le serveur ne répond pas (timeout).")
 
-        # Gestion de l'expiration du token
         if resp.status_code == 401 and retry_on_401 and self.refresh_token_value:
             if self._refresh_access_token():
                 return self._request(method, path, retry_on_401=False, **kwargs)
@@ -144,6 +143,23 @@ class APIClient:
     def can_see_finance(self) -> bool:
         return self.role in ("ADMIN", "SECR")
 
+    # ─── Utilisateurs ─────────────────────────────────────────────────────────
+
+    def creer_utilisateur(self, email: str, password: str, nom: str, prenom: str,
+                           role: str, telephone: str = "") -> dict:
+        """Créer un compte Agent/Secrétariat/Admin/Client (Admin uniquement)."""
+        return self._request(
+            "POST", "/auth/utilisateurs",
+            json={
+                "email": email, "password": password,
+                "nom": nom, "prenom": prenom,
+                "telephone": telephone, "role": role,
+            },
+        )
+
+    def liste_utilisateurs(self) -> list:
+        return self._request("GET", "/auth/utilisateurs")
+
     # ─── Cartographie ──────────────────────────────────────────────────────────
 
     def liste_caveaux(self, statut: str = None, zone_code: str = None, bloc_code: str = None) -> list:
@@ -213,10 +229,9 @@ class APIClient:
                 "nom": nom, "code": code,
                 "nombre_rangees": nombre_rangees, "nombre_colonnes": nombre_colonnes,
             },
-        )
-
-    def generer_caveaux_bloc(self, bloc_id: int, latitude_origine: float = 0.0,
-                              longitude_origine: float = 0.0, espacement_m: float = 0.5) -> dict:
+        )   
+    def generer_caveaux_bloc(self, bloc_id: int, latitude_origine: float = -4.845,
+                              longitude_origine: float = 11.899, espacement_m: float = 0.5) -> dict:
         return self._request(
             "POST", f"/terrain/blocs/{bloc_id}/generer-caveaux",
             params={
@@ -292,6 +307,10 @@ class APIClient:
 
     def detail_facture(self, facture_id: int) -> dict:
         return self._request("GET", f"/finance/factures/{facture_id}")
+
+    # NOUVEAU : téléchargement du PDF de la facture (retourne les bytes bruts)
+    def telecharger_facture_pdf(self, facture_id: int) -> bytes:
+        return self._request("GET", f"/finance/factures/{facture_id}/pdf")
 
     def enregistrer_paiement(self, facture_id: int, canal: str, montant: float,
                                reference: str = "", telephone: str = "", notes: str = "") -> dict:

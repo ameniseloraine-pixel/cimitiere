@@ -52,8 +52,12 @@ gunicorn==21.2.0
 # ════════════════════════════════════════════
 psycopg2-binary==2.9.9
 
+# Parsing de DATABASE_URL fourni automatiquement par Render en production
+dj-database-url==2.1.0
+
 # Redis pour Celery (alertes asynchrones)
 # redis==5.0.3
 
 # WeasyPrint (alternative à ReportLab, nécessite GTK sous Windows)
 # weasyprint==62.3
+requests

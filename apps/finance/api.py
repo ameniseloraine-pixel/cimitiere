@@ -3,13 +3,15 @@ API Finance — Factures, Paiements multi-canal, Tarifs
 Gestion des paiements partiels et historique des transactions
 """
 
+import logging
 from typing import List, Optional
 from decimal import Decimal
 from ninja import Router, Schema
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.http import HttpResponse
 
-from apps.users.api import auth
+from apps.users.api import auth, auth_telechargement
 from apps.users.models import RoleUtilisateur
 from .models import (
     Facture, LigneFacture, Paiement, Tarif,
@@ -19,6 +21,7 @@ from .models import (
 from . import mobile_money_simulator
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -204,6 +207,29 @@ def detail_facture(request, facture_id: int):
     return 200, _build_facture_out(f)
 
 
+# NOUVEAU : téléchargement du PDF de la facture
+# CORRECTIF (faille précédente) : auth=auth_telechargement au lieu de auth=auth,
+# car ce lien est ouvert directement dans le navigateur du client
+# (page.launch_url côté frontend) et ne peut donc pas envoyer de header
+# Authorization — le token est passé en paramètre d'URL (?token=...).
+@router.get("/factures/{facture_id}/pdf", auth=auth_telechargement)
+def telecharger_facture_pdf(request, facture_id: int):
+    """Génère et retourne le PDF de la facture pour téléchargement."""
+    f = get_object_or_404(
+        Facture.objects.select_related("client").prefetch_related("lignes"),
+        id=facture_id
+    )
+    if request.auth.role == RoleUtilisateur.CLIENT and f.client != request.auth:
+        return HttpResponse(status=403)
+
+    from apps.notifications.pdf_generators import generer_pdf_facture
+    pdf_bytes = generer_pdf_facture(f)
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{f.numero_facture}.pdf"'
+    return response
+
+
 @router.post("/factures/{facture_id}/lignes", response={201: FactureOutSchema, 403: ErrorSchema, 404: ErrorSchema}, auth=auth)
 def ajouter_ligne_facture(request, facture_id: int, data: LigneFactureCreateSchema):
     """Ajouter une ligne à une facture (Admin/Secrétariat)."""
@@ -340,7 +366,6 @@ def factures_en_retard(request):
     if not request.auth.peut_voir_finances:
         return 403, {"detail": "Permission insuffisante."}
 
-    # Mettre à jour les statuts d'abord
     factures = Facture.objects.filter(
         statut__in=[StatutFacture.EMISE, StatutFacture.PARTIELLEMENT_PAYEE],
         date_echeance__lt=timezone.now().date(),
@@ -357,7 +382,7 @@ def factures_en_retard(request):
 # ─── Simulation Mobile Money / Airtel Money ──────────────────────────────────
 
 class InitierTransactionSchema(Schema):
-    canal: str          # MOBILE_MONEY ou AIRTEL_MONEY
+    canal: str
     telephone: str
     montant: float
 
@@ -415,15 +440,9 @@ def _build_transaction_out(t: TransactionMobileMoney) -> TransactionMobileOutSch
 def initier_paiement_mobile(request, facture_id: int, data: InitierTransactionSchema):
     """
     Initie un paiement Mobile Money / Airtel Money (simulation d'API de test).
-
-    Le client (ou un agent pour son compte) déclenche un push de paiement
-    simulé : un code de confirmation à 6 chiffres est envoyé par email,
-    reproduisant la notification push qu'enverrait normalement l'opérateur.
     """
     facture = get_object_or_404(Facture, id=facture_id)
 
-    # Le client ne peut payer que ses propres factures ; le staff peut
-    # initier un paiement pour le compte d'un client (paiement assisté au guichet).
     if request.auth.role == RoleUtilisateur.CLIENT and facture.client != request.auth:
         return 403, {"detail": "Vous ne pouvez payer que vos propres factures."}
 
@@ -441,15 +460,12 @@ def initier_paiement_mobile(request, facture_id: int, data: InitierTransactionSc
             "detail": f"Le montant ({montant:,.0f} FCFA) dépasse le solde restant ({facture.solde_restant:,.0f} FCFA)."
         }
 
-    # Empêcher d'avoir plusieurs transactions en attente simultanées sur la même facture
     transaction_existante = TransactionMobileMoney.objects.filter(
         facture=facture, statut=StatutTransactionMobile.EN_ATTENTE_CONFIRMATION
     ).first()
     if transaction_existante and not transaction_existante.est_expiree:
-        return 400, {
-            "detail": f"Une transaction est déjà en attente de confirmation "
-                      f"(réf. {transaction_existante.reference}). Confirmez-la ou attendez son expiration."
-        }
+        transaction_existante.statut = StatutTransactionMobile.ANNULEE
+        transaction_existante.save(update_fields=["statut"])
 
     transaction = mobile_money_simulator.initier_transaction(
         facture=facture,
@@ -468,12 +484,7 @@ def initier_paiement_mobile(request, facture_id: int, data: InitierTransactionSc
     auth=auth,
 )
 def confirmer_paiement_mobile(request, transaction_id: int, data: ConfirmerTransactionSchema):
-    """
-    Confirme une transaction Mobile Money / Airtel Money avec le code reçu.
-
-    En cas de succès, le paiement est automatiquement enregistré sur la
-    facture et son solde est mis à jour.
-    """
+    """Confirme une transaction Mobile Money / Airtel Money avec le code reçu."""
     transaction = get_object_or_404(
         TransactionMobileMoney.objects.select_related("facture", "initiateur"),
         id=transaction_id,
@@ -494,6 +505,21 @@ def confirmer_paiement_mobile(request, transaction_id: int, data: ConfirmerTrans
             id=transaction.facture_id,
         )
         facture_out = _build_facture_out(facture_fraiche)
+
+        # CORRECTIF (faille précédente) : contrairement au paiement manuel
+        # enregistré par le staff (cf. enregistrer_paiement ci-dessus), le
+        # paiement Mobile Money confirmé en self-service par le client ne
+        # déclenchait AUCUNE notification — le client ne recevait jamais
+        # de confirmation par email quand sa facture était soldée.
+        if facture_fraiche.est_soldee:
+            try:
+                from apps.notifications.tasks import envoyer_confirmation_paiement
+                envoyer_confirmation_paiement.delay(facture_fraiche.id)
+            except Exception:
+                logger.exception(
+                    "Échec de l'envoi de la confirmation de paiement Mobile Money "
+                    "pour la facture %s", facture_fraiche.numero_facture,
+                )
 
     return 200, ConfirmationResultSchema(
         succes=resultat["succes"],
@@ -544,4 +570,3 @@ def historique_transactions_mobile(request, facture_id: int):
 
     transactions = facture.transactions_mobile.order_by("-date_initiation")
     return [_build_transaction_out(t) for t in transactions]
-

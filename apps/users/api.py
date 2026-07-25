@@ -2,6 +2,7 @@
 API Authentification — Login, MFA, Refresh, Logout, CRUD Utilisateurs
 """
 
+import os
 from datetime import timedelta
 from typing import Optional
 
@@ -50,6 +51,14 @@ class UtilisateurCreateSchema(Schema):
     telephone: Optional[str] = ""
     role: str = RoleUtilisateur.CLIENT
 
+class UtilisateurCreateAdminSchema(Schema):
+    email: str
+    password: str
+    nom: str
+    prenom: str
+    telephone: Optional[str] = ""
+    role: str
+
 class UtilisateurOutSchema(Schema):
     id: int
     email: str
@@ -93,6 +102,36 @@ class AuthBearer(HttpBearer):
 auth = AuthBearer()
 
 
+def auth_telechargement(request):
+    """
+    Authentification pour les liens de téléchargement direct (PDF, etc.)
+    ouverts par le navigateur du client (page.launch_url côté frontend).
+
+    Un lien de navigation classique ne peut pas envoyer de header
+    Authorization personnalisé — contrairement aux appels API classiques
+    du frontend (requests avec header Bearer). On accepte donc ici le
+    token JWT en paramètre d'URL (?token=...) en plus du header, pour
+    ces endpoints de téléchargement uniquement. Le token reste
+    à courte durée de vie (SIMPLE_JWT.ACCESS_TOKEN_LIFETIME) et les
+    mêmes vérifications de rôle/propriétaire s'appliquent ensuite dans
+    l'endpoint — cette fonction ne fait qu'identifier l'utilisateur.
+    """
+    token = request.GET.get("token")
+    if not token:
+        header = request.headers.get("Authorization", "")
+        if header.startswith("Bearer "):
+            token = header[7:]
+    if not token:
+        return None
+    payload = verifier_token_jwt(token)
+    if not payload:
+        return None
+    try:
+        return Utilisateur.objects.get(id=payload["user_id"])
+    except Utilisateur.DoesNotExist:
+        return None
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/login", response={200: MFARequiredSchema, 401: ErrorSchema}, auth=None)
@@ -107,7 +146,6 @@ def login(request, data: LoginSchema):
     if not user.is_active:
         return 401, {"detail": "Compte désactivé. Contactez l'administration."}
 
-    # Envoyer le code MFA
     generer_et_envoyer_code_mfa(user)
 
     return 200, {
@@ -128,7 +166,6 @@ def verify_mfa(request, data: VerifyMFASchema):
     except Utilisateur.DoesNotExist:
         return 401, {"detail": "Utilisateur introuvable."}
 
-    # Récupérer le dernier code valide
     code_mfa = (
         CodeMFA.objects.filter(utilisateur=user, utilise=False)
         .order_by("-cree_le")
@@ -138,7 +175,6 @@ def verify_mfa(request, data: VerifyMFASchema):
     if not code_mfa or not code_mfa.est_valide:
         return 401, {"detail": "Code expiré ou invalide. Reconnectez-vous."}
 
-    # Vérifier le code
     code_mfa.tentatives += 1
     code_mfa.save(update_fields=["tentatives"])
 
@@ -148,10 +184,8 @@ def verify_mfa(request, data: VerifyMFASchema):
     if code_mfa.code != data.code:
         return 401, {"detail": f"Code incorrect. {3 - code_mfa.tentatives} tentative(s) restante(s)."}
 
-    # Code valide → marquer utilisé
     code_mfa.marquer_utilise()
 
-    # Générer les tokens JWT
     tokens = creer_tokens_jwt(user)
     return 200, tokens
 
@@ -187,7 +221,33 @@ def register(request, data: UtilisateurCreateSchema):
         nom=data.nom,
         prenom=data.prenom,
         telephone=data.telephone or "",
-        role=RoleUtilisateur.CLIENT,  # Toujours CLIENT à l'auto-inscription
+        role=RoleUtilisateur.CLIENT,
+    )
+    return 201, UtilisateurOutSchema.from_orm(user)
+
+
+@router.post("/utilisateurs", response={201: UtilisateurOutSchema, 403: ErrorSchema, 400: ErrorSchema}, auth=auth)
+def creer_utilisateur(request, data: UtilisateurCreateAdminSchema):
+    """Création d'un compte par un admin, avec choix du rôle (Agent, Secrétariat, Admin, Client)."""
+    if not request.auth.est_admin:
+        return 403, {"detail": "Seul un administrateur peut créer un utilisateur."}
+    if Utilisateur.objects.filter(email=data.email).exists():
+        return 400, {"detail": "Un compte existe déjà avec cet email."}
+    roles_valides = (
+        RoleUtilisateur.ADMINISTRATEUR,
+        RoleUtilisateur.AGENT_TERRAIN,
+        RoleUtilisateur.SECRETARIAT,
+        RoleUtilisateur.CLIENT,
+    )
+    if data.role not in roles_valides:
+        return 400, {"detail": "Rôle invalide."}
+    user = Utilisateur.objects.create_user(
+        email=data.email,
+        password=data.password,
+        nom=data.nom,
+        prenom=data.prenom,
+        telephone=data.telephone or "",
+        role=data.role,
     )
     return 201, UtilisateurOutSchema.from_orm(user)
 
@@ -196,6 +256,28 @@ def register(request, data: UtilisateurCreateSchema):
 def liste_utilisateurs(request):
     """Liste tous les utilisateurs (Admin seulement)."""
     if not request.auth.est_admin:
-        return []  # 403 géré par middleware
+        return []
     users = Utilisateur.objects.all().order_by("nom")
     return [UtilisateurOutSchema.from_orm(u) for u in users]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠️ ENDPOINT TEMPORAIRE — à supprimer après avoir créé le premier admin !
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/promouvoir-admin-temp", auth=None)
+def promouvoir_admin_temp(request, email: str, secret: str):
+    """
+    ⚠️ TEMPORAIRE : promeut un utilisateur en administrateur.
+    Protégé par un secret (variable d'env PROMOTE_SECRET).
+    À SUPPRIMER une fois le premier admin créé.
+    """
+    if secret != os.environ.get("PROMOTE_SECRET", ""):
+        return {"detail": "Non autorisé"}
+    try:
+        u = Utilisateur.objects.get(email=email)
+        u.role = RoleUtilisateur.ADMINISTRATEUR
+        u.save()
+        return {"message": f"{email} est maintenant administrateur."}
+    except Utilisateur.DoesNotExist:
+        return {"detail": "Utilisateur introuvable."}
