@@ -16,7 +16,7 @@ Variables d'environnement :
 Idempotente et sûre à relancer à chaque déploiement.
 """
 
-import os
+from decouple import config
 from django.core.management.base import BaseCommand
 from apps.users.models import Utilisateur, RoleUtilisateur
 
@@ -25,11 +25,11 @@ class Command(BaseCommand):
     help = "Crée/synchronise le super admin désigné à partir des variables d'environnement."
 
     def handle(self, *args, **options):
-        email = os.environ.get("ADMIN_EMAIL", "").strip()
-        password = os.environ.get("ADMIN_PASSWORD", "").strip()
-        nom = os.environ.get("ADMIN_NOM", "Admin").strip()
-        prenom = os.environ.get("ADMIN_PRENOM", "Site").strip()
-        desactiver_autres = os.environ.get("DESACTIVER_AUTRES_ADMINS", "").strip().lower() == "true"
+        email = config("ADMIN_EMAIL", default="").strip()
+        password = config("ADMIN_PASSWORD", default="").strip()
+        nom = config("ADMIN_NOM", default="Admin").strip()
+        prenom = config("ADMIN_PRENOM", default="Site").strip()
+        desactiver_autres = config("DESACTIVER_AUTRES_ADMINS", default="").strip().lower() == "true"
 
         if not email or not password:
             self.stdout.write(self.style.WARNING(
@@ -43,7 +43,10 @@ class Command(BaseCommand):
                 "nom": nom, "prenom": prenom,
                 "role": RoleUtilisateur.ADMINISTRATEUR,
                 "is_staff": True, "is_superuser": True,
-                "is_active": True, "mfa_activee": False,
+                # CORRECTIF : le MFA reste obligatoire, y compris pour ce
+                # compte — sinon on recrée la faille identifiée plus tôt
+                # (bypass MFA via create_superuser / Django admin).
+                "is_active": True, "mfa_activee": True,
             },
         )
         user.set_password(password)
@@ -53,6 +56,7 @@ class Command(BaseCommand):
         user.is_staff = True
         user.is_superuser = True
         user.is_active = True
+        user.mfa_activee = True
         user.save()
 
         action = "créé" if cree else "mis à jour"
