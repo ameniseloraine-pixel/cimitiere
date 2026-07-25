@@ -1,3 +1,4 @@
+
 """
 API Cartographie — Carte interactive SIG
 Endpoints : liste des caveaux géolocalisés, changement de statut, GeoJSON
@@ -187,29 +188,78 @@ def _generer_html_carte(caveaux_geo: list) -> str:
     lat_centre = caveaux_geo[0]["latitude"]
     lng_centre = caveaux_geo[0]["longitude"]
 
+    LIBELLES = {
+        "DISPO": "Disponible", "RESERVE": "Réservé", "OCCUPE": "Occupé",
+        "NON_EXP": "Non exploitable", "MAINT": "En maintenance",
+    }
+
     markers_js = ""
     for c in caveaux_geo:
-        popup = f"{c['reference']} — {c['statut']}".replace('"', "'")
+        libelle = LIBELLES.get(c["statut"], c["statut"])
+        popup = (
+            f"<div style='font-family:sans-serif;min-width:140px'>"
+            f"<strong>{c['reference']}</strong><br>"
+            f"<span style='display:inline-block;width:9px;height:9px;border-radius:50%;"
+            f"background:{c['couleur']};margin-right:5px'></span>{libelle}"
+            f"</div>"
+        ).replace('"', "'").replace("\n", "")
         markers_js += f"""
         L.circleMarker([{c['latitude']}, {c['longitude']}], {{
-            radius: 9, color: "{c['couleur']}", fillColor: "{c['couleur']}", fillOpacity: 0.9, weight: 2
+            radius: 10, color: "#ffffff", fillColor: "{c['couleur']}", fillOpacity: 0.95, weight: 2
         }}).addTo(map).bindPopup("{popup}");
         """
+
+    legende_html = "".join(
+        f"""<div style="display:flex;align-items:center;gap:6px;margin:3px 0">
+              <span style="width:11px;height:11px;border-radius:50%;background:{couleur};
+                           border:1.5px solid #fff;box-shadow:0 0 0 1px #d1d5db"></span>
+              <span style="font-size:12px;color:#374151">{libelle}</span>
+            </div>"""
+        for couleur, libelle in [
+            ("#22c55e", "Disponible"), ("#f97316", "Réservé"),
+            ("#ef4444", "Occupé"), ("#9ca3af", "Non exploitable"),
+        ]
+    )
 
     return f"""
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
       <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-      <style>#map {{ height: 100vh; width: 100%; }} body {{ margin: 0; }}</style>
+      <style>
+        html, body {{ margin: 0; height: 100%; font-family: sans-serif; }}
+        #map {{ height: 100vh; width: 100%; }}
+        .legende-carte {{
+          position: absolute; top: 12px; right: 12px; z-index: 1000;
+          background: #ffffffee; padding: 10px 14px; border-radius: 10px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }}
+        .legende-titre {{ font-size: 12px; font-weight: 700; color: #1f2937; margin-bottom: 6px; }}
+        .compteur-carte {{
+          position: absolute; top: 12px; left: 50px; z-index: 1000;
+          background: #ffffffee; padding: 6px 14px; border-radius: 20px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.15); font-size: 12px; color: #1f2937;
+        }}
+        .leaflet-popup-content-wrapper {{ border-radius: 10px; }}
+      </style>
     </head>
     <body>
       <div id="map"></div>
+      <div class="legende-carte">
+        <div class="legende-titre">Légende</div>
+        {legende_html}
+      </div>
+      <div class="compteur-carte">📍 {len(caveaux_geo)} caveau(x) géolocalisé(s)</div>
       <script>
-        var map = L.map('map').setView([{lat_centre}, {lng_centre}], 17);
-        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png').addTo(map);
+        var map = L.map('map', {{ zoomControl: true }}).setView([{lat_centre}, {lng_centre}], 18);
+        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+          maxZoom: 20,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }}).addTo(map);
+        L.control.scale({{ metric: true, imperial: false }}).addTo(map);
         {markers_js}
       </script>
     </body>
